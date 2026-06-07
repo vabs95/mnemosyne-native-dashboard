@@ -53,6 +53,7 @@ const TABS = [
 const MnemosyneDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [adminMode, setAdminMode] = useState(false);
+  const [version, setVersion] = useState('0.1.0');
   const [inspectedMemoryId, setInspectedMemoryId] = useState<string | null>(null);
   const [inspectedMemory, setInspectedMemory] = useState<MemoryItem | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -97,6 +98,7 @@ const MnemosyneDashboard: React.FC = () => {
   useEffect(() => {
     fetchJSON(`${API}/config`).then(res => {
       if (res?.config) setAdminMode(!!res.config.memory_admin_enabled);
+      if (res?.version) setVersion(res.version);
     }).catch(() => {});
   }, []);
 
@@ -136,7 +138,7 @@ const MnemosyneDashboard: React.FC = () => {
         fontFamily: 'var(--theme-font-mono)',
         color: 'rgba(234,234,234,0.45)',
       }}>
-        <span>v0.13.1</span>
+        <span>v{version}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span style={{
             width: '6px', height: '6px', borderRadius: '50%',
