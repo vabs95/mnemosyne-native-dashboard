@@ -1,0 +1,13 @@
+{
+  "name": "mnemosyne-native-dashboard-web",
+  "version": "1.0.0",
+  "description": "React-based frontend tab for Hermes Agent web dashboard",
+  "scripts": {
+    "build": "node esbuild.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.20.1",
+    "typescript": "^5.3.3",
+    "@types/react": "^18.2.55"
+  }
+}

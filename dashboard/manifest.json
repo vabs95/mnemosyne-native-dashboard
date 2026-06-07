@@ -1,0 +1,13 @@
+{
+  "name": "mnemosyne-native-dashboard",
+  "label": "Mnemosyne",
+  "description": "Native Hermes dashboard for browsing and visualising Mnemosyne memories",
+  "icon": "Database",
+  "version": "0.1.0",
+  "tab": {
+    "path": "/mnemosyne",
+    "position": "after:analytics"
+  },
+  "entry": "dist/index.js",
+  "api": "plugin_api.py"
+}

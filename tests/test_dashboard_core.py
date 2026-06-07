@@ -1,0 +1,644 @@
+import importlib.metadata as md
+import sqlite3
+import sys
+import tomllib
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from dashboard.config import default_db_path, effective_config, load_config, save_config
+from dashboard.dashboard_core import DashboardStore
+
+
+def make_db(path: Path):
+    con = sqlite3.connect(path)
+    con.executescript("""
+    CREATE TABLE working_memory (
+        id TEXT PRIMARY KEY, content TEXT NOT NULL, source TEXT, timestamp TEXT,
+        session_id TEXT DEFAULT 'default', importance REAL DEFAULT 0.5,
+        metadata_json TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        recall_count INTEGER DEFAULT 0, last_recalled TIMESTAMP DEFAULT NULL,
+        valid_until TIMESTAMP DEFAULT NULL, superseded_by TEXT DEFAULT NULL,
+        scope TEXT DEFAULT 'global', author_id TEXT, author_type TEXT, channel_id TEXT,
+        veracity TEXT DEFAULT 'unknown'
+    );
+    CREATE TABLE episodic_memory (
+        rowid INTEGER PRIMARY KEY AUTOINCREMENT,
+        id TEXT UNIQUE NOT NULL, content TEXT NOT NULL, source TEXT, timestamp TEXT,
+        session_id TEXT DEFAULT 'default', importance REAL DEFAULT 0.5,
+        metadata_json TEXT, summary_of TEXT DEFAULT '', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        recall_count INTEGER DEFAULT 0, last_recalled TIMESTAMP DEFAULT NULL,
+        valid_until TIMESTAMP DEFAULT NULL, superseded_by TEXT DEFAULT NULL,
+        scope TEXT DEFAULT 'global', author_id TEXT, author_type TEXT, channel_id TEXT,
+        veracity TEXT DEFAULT 'unknown', tier INTEGER DEFAULT 1, degraded_at TEXT
+    );
+    CREATE TABLE triples (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        subject TEXT NOT NULL, predicate TEXT NOT NULL, object TEXT NOT NULL,
+        valid_from TEXT NOT NULL, valid_until TEXT, source TEXT, confidence REAL DEFAULT 1.0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE consolidation_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, items_consolidated INTEGER,
+        summary_preview TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    con.execute(
+        "INSERT INTO working_memory(id,content,source,timestamp,session_id,importance,scope) VALUES (?,?,?,?,?,?,?)",
+        ("w1", "YC prefers local-only WhatsApp memory", "preference", "2026-01-01T00:00:00", "s1", 0.9, "global"),
+    )
+    con.execute(
+        "INSERT INTO episodic_memory(id,content,source,timestamp,session_id,importance,scope,summary_of) VALUES (?,?,?,?,?,?,?,?)",
+        ("e1", "Built a Mnemosyne dashboard visualiser", "task", "2026-01-02T00:00:00", "s2", 0.6, "session", "w1"),
+    )
+    con.execute(
+        "INSERT INTO working_memory(id,content,source,timestamp,session_id,importance,scope) VALUES (?,?,?,?,?,?,?)",
+        ("w2", "YC uses Obsidian for notes", "preference", "2026-01-03T00:00:00", "s3", 0.4, "global"),
+    )
+    con.execute(
+        "INSERT INTO working_memory(id,content,source,timestamp,session_id,importance,scope) VALUES (?,?,?,?,?,?,?)",
+        ("w3", "YC knows Diana from school", "preference", "2026-01-04T00:00:00", "s4", 0.4, "global"),
+    )
+    con.execute(
+        "INSERT INTO working_memory(id,content,source,timestamp,session_id,importance,scope,last_recalled) VALUES (?,?,?,?,?,?,?,?)",
+        (
+            "w4",
+            "YC uses WHOOP for health and recovery",
+            "health",
+            "2026-05-04T08:00:00",
+            "s5",
+            0.7,
+            "global",
+            "2026-05-04T09:00:00",
+        ),
+    )
+    con.execute(
+        "INSERT INTO episodic_memory(id,content,source,timestamp,session_id,importance,scope,summary_of) VALUES (?,?,?,?,?,?,?,?)",
+        ("e2", "Shipped Mnemosyne Dashboard v0.7 planning", "task", "2026-05-04T10:00:00", "s5", 0.5, "session", "w4"),
+    )
+    con.execute(
+        "INSERT INTO triples(subject,predicate,object,valid_from,source,confidence) VALUES (?,?,?,?,?,?)",
+        ("YC", "prefers", "local-only memory", "2026-01-01", "preference", 0.95),
+    )
+    con.execute(
+        "INSERT INTO triples(subject,predicate,object,valid_from,source,confidence) VALUES (?,?,?,?,?,?)",
+        ("YC", "uses", "Obsidian", "2026-01-01", "preference", 0.95),
+    )
+    con.execute(
+        "INSERT INTO triples(subject,predicate,object,valid_from,source,confidence) VALUES (?,?,?,?,?,?)",
+        ("YC", "knows", "Diana", "2026-01-01", "preference", 0.95),
+    )
+    con.execute(
+        "INSERT INTO consolidation_log(session_id,items_consolidated,summary_preview) VALUES (?,?,?)",
+        ("s2", 3, "Dashboard work"),
+    )
+    con.execute("UPDATE working_memory SET veracity = 'stated' WHERE id = 'w1'")
+    con.execute("UPDATE working_memory SET veracity = 'tool' WHERE id = 'w4'")
+    con.execute(
+        "UPDATE episodic_memory SET veracity = 'inferred', tier = 2, degraded_at = '2026-05-05T00:00:00' WHERE id = 'e1'"
+    )
+    con.execute(
+        "UPDATE episodic_memory SET veracity = 'imported', tier = 3, degraded_at = '2026-05-05T01:00:00' WHERE id = 'e2'"
+    )
+    con.commit()
+    con.close()
+
+
+def test_release_version_is_consistent():
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    project_version = pyproject["project"]["version"]
+    plugin_text = (ROOT / "plugin.yaml").read_text(encoding="utf-8")
+
+    assert project_version == "0.1.0"
+    assert f'version: "{project_version}"' in plugin_text
+
+
+def test_stats_counts_memory_tables(tmp_path):
+    db = tmp_path / "mnemosyne.db"
+    make_db(db)
+    stats = DashboardStore(db).stats()
+    assert stats["counts"]["working_memory"] == 4
+    assert stats["counts"]["episodic_memory"] == 2
+    assert stats["counts"]["triples"] == 3
+    assert stats["counts"]["consolidation_log"] == 1
+
+
+def test_stats_exposes_v23_trust_and_degradation_mix(tmp_path):
+    db = tmp_path / "mnemosyne.db"
+    make_db(db)
+    stats = DashboardStore(db).stats()
+
+    assert {r["veracity"]: r["count"] for r in stats["by_veracity"]} == {
+        "unknown": 2,
+        "stated": 1,
+        "tool": 1,
+        "inferred": 1,
+        "imported": 1,
+    }
+    assert {r["degradation_label"]: r["count"] for r in stats["by_degradation"]} == {
+        "hot": 0,
+        "warm": 1,
+        "cold": 1,
+    }
+    assert stats["contamination"]["total"] == 5
+    assert stats["contamination"]["high_importance"] == 2
+    assert stats["degradation"]["degraded"] == 2
+
+
+def test_list_memories_searches_both_tiers(tmp_path):
+    db = tmp_path / "mnemosyne.db"
+    make_db(db)
+    rows = DashboardStore(db).list_memories(kind="all", q="visualiser", limit=10)
+    assert [r["id"] for r in rows] == ["e1"]
+    assert rows[0]["tier"] == "episodic"
+    assert rows[0]["memory_kind"] == "episodic"
+    assert rows[0]["degradation_tier"] == 2
+    assert rows[0]["degradation_label"] == "warm"
+    assert rows[0]["veracity"] == "inferred"
+    assert rows[0]["trust_weight"] == 0.7
+    assert rows[0]["degradation_weight"] == 0.5
+    assert rows[0]["effective_memory_weight"] == 0.35
+
+
+def test_list_memories_filters_v23_veracity_and_degradation(tmp_path):
+    db = tmp_path / "mnemosyne.db"
+    make_db(db)
+    store = DashboardStore(db)
+
+    assert [r["id"] for r in store.list_memories(kind="all", veracity="tool", limit=10)] == ["w4"]
+    assert [r["id"] for r in store.list_memories(kind="all", contaminated_only=True, sort="importance", limit=10)] == [
+        "w4",
+        "e1",
+        "e2",
+        "w3",
+        "w2",
+    ]
+    assert [r["id"] for r in store.list_memories(kind="episodic", degradation_tier=3, limit=10)] == ["e2"]
+    assert [r["id"] for r in store.list_memories(kind="episodic", degraded_only=True, limit=10)] == ["e2", "e1"]
+
+
+def test_review_queues_surface_trust_lifecycle_work(tmp_path):
+    db = tmp_path / "mnemosyne.db"
+    make_db(db)
+    con = sqlite3.connect(db)
+    con.execute(
+        "INSERT INTO working_memory(id,content,source,timestamp,session_id,importance,scope,veracity,valid_until) VALUES (?,?,?,?,?,?,?,?,?)",
+        (
+            "expired_review",
+            "Expired contaminated review item",
+            "test",
+            "2026-01-05T00:00:00",
+            "s6",
+            0.99,
+            "global",
+            "unknown",
+            "2020-01-01T00:00:00",
+        ),
+    )
+    con.execute(
+        "INSERT INTO working_memory(id,content,source,timestamp,session_id,importance,scope,veracity,superseded_by) VALUES (?,?,?,?,?,?,?,?,?)",
+        (
+            "superseded_review",
+            "Superseded contaminated review item",
+            "test",
+            "2026-01-06T00:00:00",
+            "s7",
+            0.98,
+            "global",
+            "unknown",
+            "replacement",
+        ),
+    )
+    con.commit()
+    con.close()
+    store = DashboardStore(db)
+
+    review = store.review_queues(queue="high_importance_contaminated", limit=10)
+    assert review["read_only"] is True
+    assert [card["key"] for card in review["cards"]] == [
+        "contaminated",
+        "high_importance_contaminated",
+        "degraded",
+        "due_for_degradation",
+    ]
+    assert review["counts"]["contaminated"] == 5
+    assert review["counts"]["high_importance_contaminated"] == 2
+    assert review["counts"]["degraded"] == 2
+    assert "due_for_degradation" in review["counts"]
+    assert [item["id"] for item in review["queues"]["high_importance_contaminated"]["items"]] == ["w4", "e1"]
+    assert all(item["status"] == "active" for item in review["queues"]["high_importance_contaminated"]["items"])
+    assert review["queues"]["degraded"]["items"] == []
+    assert review["queues"]["contaminated"]["title"] == "Needs review"
+    assert review["queues"]["high_importance_contaminated"]["title"] == "Important memories needing review"
+    assert review["queues"]["degraded"]["title"] == "Degraded"
+    assert review["queues"]["contaminated"]["filter"]["contaminated_only"] == "1"
+    assert review["queues"]["degraded"]["filter"]["degraded_only"] == "1"
+    assert review["queues"]["due_for_degradation"]["filter"]["due_for_degradation"] == "1"
+
+
+def test_review_queues_page_selected_queue_and_filter_by_importance(tmp_path):
+    db = tmp_path / "mnemosyne.db"
+    make_db(db)
+    con = sqlite3.connect(db)
+    con.executemany(
+        "INSERT INTO working_memory(id,content,source,timestamp,session_id,importance,scope,veracity) VALUES (?,?,?,?,?,?,?,?)",
+        [
+            (
+                f"bulk{i:03d}",
+                f"Bulk contaminated memory {i}",
+                "test",
+                "2026-05-06T00:00:00",
+                "bulk",
+                0.95 if i < 110 else 0.1,
+                "global",
+                "unknown",
+            )
+            for i in range(150)
+        ],
+    )
+    con.commit()
+    con.close()
+
+    review = DashboardStore(db).review_queues(queue="contaminated", limit=100, offset=0, min_importance=0.8)
+
+    assert review["queue"] == "contaminated"
+    assert review["limit"] == 100
+    assert review["offset"] == 0
+    assert review["next_offset"] == 100
+    assert review["has_more"] is True
+    assert review["counts"]["contaminated"] == 110
+    assert len(review["queues"]["contaminated"]["items"]) == 100
+    assert review["queues"]["high_importance_contaminated"]["items"] == []
+    assert all(float(item["importance"]) >= 0.8 for item in review["queues"]["contaminated"]["items"])
+
+    next_page = DashboardStore(db).review_queues(queue="contaminated", limit=100, offset=100, min_importance=0.8)
+    assert next_page["next_offset"] is None
+    assert next_page["has_more"] is False
+    assert len(next_page["queues"]["contaminated"]["items"]) == 10
+
+
+def test_review_queues_filter_by_search_query(tmp_path):
+    db = tmp_path / "mnemosyne.db"
+    make_db(db)
+    review = DashboardStore(db).review_queues(queue="contaminated", limit=100, q="WHOOP")
+
+    assert review["counts"]["contaminated"] == 1
+    assert [item["id"] for item in review["queues"]["contaminated"]["items"]] == ["w4"]
+
+
+def test_lifecycle_dashboard_surfaces_degradation_queues(tmp_path):
+    db = tmp_path / "mnemosyne.db"
+    make_db(db)
+    store = DashboardStore(db)
+
+    lifecycle = store.lifecycle_dashboard(limit=10)
+    assert lifecycle["read_only"] is True
+    assert lifecycle["thresholds"]["tier2_days"] == 30
+    assert lifecycle["thresholds"]["tier3_days"] == 180
+    assert [card["key"] for card in lifecycle["cards"]] == [
+        "hot",
+        "warm",
+        "cold",
+        "due_for_degradation",
+        "recently_degraded",
+        "high_importance_degraded",
+    ]
+    assert lifecycle["counts"]["hot"] == 0
+    assert lifecycle["counts"]["warm"] == 1
+    assert lifecycle["counts"]["cold"] == 1
+    assert lifecycle["counts"]["recently_degraded"] == 2
+    assert lifecycle["counts"]["high_importance_degraded"] == 1
+    assert [item["id"] for item in lifecycle["queues"]["recently_degraded"]["items"]] == ["e2", "e1"]
+    assert [item["id"] for item in lifecycle["queues"]["high_importance_degraded"]["items"]] == ["e1"]
+    assert lifecycle["queues"]["cold"]["filter"]["degradation_tier"] == "3"
+    assert lifecycle["queues"]["due_for_degradation"]["filter"]["due_for_degradation"] == "1"
+
+
+def test_search_uses_token_prefix_not_mid_word_substring(tmp_path):
+    db = tmp_path / "mnemosyne.db"
+    make_db(db)
+    store = DashboardStore(db)
+
+    memory_rows = store.list_memories(kind="all", q="Dian", limit=10)
+    assert [r["id"] for r in memory_rows] == ["w3"]
+
+    triple_rows = store.triples(q="Dian", limit=10)
+    assert [r["object"] for r in triple_rows] == ["Diana"]
+
+    search = store.global_search(q="Dian", limit=10)
+    assert [r["id"] for r in search["memories"]] == ["w3"]
+    assert [r["object"] for r in search["triples"]] == ["Diana"]
+
+
+def test_list_memories_filters_and_sorts_by_importance(tmp_path):
+    db = tmp_path / "mnemosyne.db"
+    make_db(db)
+    rows = DashboardStore(db).list_memories(kind="all", scope="global", session_id="s1", sort="importance", limit=10)
+    assert [r["id"] for r in rows] == ["w1"]
+    assert rows[0]["importance"] == 0.9
+
+
+def test_graph_returns_nodes_edges_and_filterable_metadata(tmp_path):
+    db = tmp_path / "mnemosyne.db"
+    make_db(db)
+    graph = DashboardStore(db).graph(q="local-only", limit=10)
+    labels = {n["label"] for n in graph["nodes"]}
+    assert {"YC", "local-only memory"} <= labels
+    assert graph["edges"][0]["predicate"] == "prefers"
+    assert graph["edges"][0]["subject"] == "YC"
+    assert graph["edges"][0]["object"] == "local-only memory"
+
+
+def test_timeline_search_matches_session_id(tmp_path):
+    db = tmp_path / "mnemosyne.db"
+    make_db(db)
+    timeline = DashboardStore(db).timeline(q="s2", group="session", limit=20)
+    groups = {g["key"]: g for g in timeline["groups"]}
+    assert "s2" in groups
+    assert {e["type"] for e in groups["s2"]["events"]} == {"memory", "consolidation"}
+
+
+def test_triple_search_matches_terms_across_subject_predicate_object(tmp_path):
+    db = tmp_path / "mnemosyne.db"
+    make_db(db)
+    rows = DashboardStore(db).triples(q="YC knows Diana", limit=10)
+    assert [(r["subject"], r["predicate"], r["object"]) for r in rows] == [("YC", "knows", "Diana")]
+
+
+def test_diagnostics_reports_database_health(tmp_path):
+    db = tmp_path / "mnemosyne.db"
+    make_db(db)
+    diag = DashboardStore(db).diagnostics()
+    assert diag["ok"] is True
+    assert diag["exists"] is True
+    assert diag["read_only"] is True
+    assert diag["table_counts"]["working_memory"] == 4
+    assert diag["table_counts"]["triples"] == 3
+
+
+def test_session_detail_unifies_related_items(tmp_path):
+    db = tmp_path / "mnemosyne.db"
+    make_db(db)
+    detail = DashboardStore(db).session_detail("s2")
+    assert detail["session_id"] == "s2"
+    assert detail["counts"]["memories"] == 1
+    assert detail["counts"]["consolidations"] == 1
+    assert {e["type"] for e in detail["events"]} == {"memory", "consolidation"}
+
+
+def test_memory_status_filter_and_safe_mutations(tmp_path, monkeypatch):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
+    db = tmp_path / "mnemosyne.db"
+    make_db(db)
+    store = DashboardStore(db)
+
+    assert [r["id"] for r in store.list_memories(kind="all", status="active", limit=10)] == [
+        "e2",
+        "w4",
+        "w3",
+        "w2",
+        "e1",
+        "w1",
+    ]
+
+    expired = store.invalidate_memory("w2")
+    assert expired["ok"] is True
+    assert expired["item"]["status"] == "expired"
+    assert [r["id"] for r in store.list_memories(kind="all", status="expired", limit=10)] == ["w2"]
+
+    updated = store.set_memory_importance("w1", 0.33)
+    assert updated["item"]["importance"] == 0.33
+
+    trust = store.set_memory_veracity("w2", "stated")
+    assert trust["ok"] is True
+    assert trust["item"]["veracity"] == "stated"
+
+    expiry = store.set_memory_expiry("w3", "2026-06-01T00:00:00")
+    assert expiry["ok"] is True
+    assert expiry["item"]["valid_until"] == "2026-06-01T00:00:00"
+
+    superseded = store.supersede_memory("w1", "YC prefers local-only private memory", importance=0.95)
+    assert superseded["item"]["status"] == "superseded"
+    assert superseded["replacement"]["content"] == "YC prefers local-only private memory"
+    assert superseded["replacement"]["status"] == "active"
+    assert superseded["replacement_id"] in {
+        r["id"] for r in store.list_memories(kind="working", status="active", limit=20)
+    }
+
+    audit = store.audit_log()
+    assert [row["action"] for row in audit[:5]] == ["supersede", "expiry", "veracity", "importance", "invalidate"]
+    assert Path(superseded["backup"]["path"]).exists()
+
+
+def test_config_file_env_and_runtime_overrides(tmp_path, monkeypatch):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
+    cfg = load_config(create=True)
+    assert cfg.memory_admin_enabled is False
+    assert Path(tmp_path / "hermes" / "plugin-data" / "mnemosyne-native-dashboard" / "config.json").exists()
+
+    cfg = save_config(db_path=str(tmp_path / "test.db"))
+    assert cfg.db_path == str(tmp_path / "test.db")
+
+    monkeypatch.setenv("MNEMOSYNE_DASHBOARD_DB", str(tmp_path / "env.db"))
+    assert load_config().db_path == str(tmp_path / "env.db")
+    assert effective_config({"db_path": str(tmp_path / "eff.db")}).db_path == str(tmp_path / "eff.db")
+
+
+def test_default_db_path_detects_existing_mnemosyne_database(tmp_path, monkeypatch):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
+    db = tmp_path / "hermes" / "mnemosyne" / "data" / "mnemosyne.db"
+    db.parent.mkdir(parents=True)
+    db.write_text("sqlite placeholder")
+    assert default_db_path() == db
+    assert load_config(create=True).db_path == str(db)
+
+
+def test_memory_intelligence_read_only_views(tmp_path):
+    db = tmp_path / "mnemosyne.db"
+    make_db(db)
+    store = DashboardStore(db)
+
+    digest = store.today_digest(day="2026-05-04")
+    assert digest["read_only"] is True
+    assert digest["counts"]["memories_added"] == 2
+    assert digest["counts"]["memories_recalled"] == 1
+    assert digest["counts"]["contaminated_added"] == 2
+    assert digest["counts"]["degraded_added"] == 1
+    assert {m["id"] for m in digest["memories_added"]} == {"w4", "e2"}
+    by_today_veracity = {r["label"]: r["count"] for r in digest["breakdowns"]["veracity"]}
+    assert by_today_veracity["tool"] == 1
+    assert by_today_veracity["imported"] == 1
+    by_today_degradation = {r["label"]: r["count"] for r in digest["breakdowns"]["degradation"]}
+    assert by_today_degradation["cold"] == 1
+
+    profile = store.inferred_profile(limit_per_section=5)
+    sections = {s["name"]: s for s in profile["sections"]}
+    assert "Health / wearables" in sections
+    assert any("WHOOP" in item["label"] for item in sections["Health / wearables"]["items"])
+    assert "Home setup" in DashboardStore._context_category_names()
+    assert profile["summary"]["indexed_signals"] >= 1
+    assert profile["summary"]["sensitive"] >= 1
+
+    constellation = store.constellation(limit=80)
+    assert constellation["read_only"] is True
+    labels = {n["label"] for n in constellation["nodes"]}
+    assert "YC" in labels
+    assert constellation["edges"]
+
+
+def test_memory_domain_classifier_keeps_dungeon_sections_meaningful():
+    classify = DashboardStore._category_for_text
+
+    assert classify("Hindsight daemon health check is healthy with DB connected") == "Agent memory"
+    assert classify("Mnemosyne Labyrinth FPS viewport joystick fix for Memory Palace") == "Dashboard / visualisers"
+    assert classify("whatsapp-cli sync watchdog restart service com.whatsapp-cli.sync") == "Messaging / WhatsApp"
+    assert classify("YC uses WHOOP sleep recovery HRV and strain reports") == "Health / wearables"
+    assert classify("Hokkaido April trip itinerary with Hakodate sakura") == "Travel / leisure"
+    assert classify("Sheryl and Hope household helper permissions") == "People"
+    assert classify("Home Assistant light sensor automation") == "Home setup"
+    assert classify("Promptlybuilt marketing business LinkedIn case study") == "Work / business"
+    assert classify("WhatsApp history must stay local-only and no cloud") == "Privacy rules"
+
+
+def test_realtime_status_detects_mnemosyne_streaming_and_deltasync(tmp_path):
+    db = tmp_path / "mnemosyne.db"
+    make_db(db)
+    status = DashboardStore(db).realtime_status()
+
+    assert status["read_only"] is True
+    try:
+        expected_version = md.version("mnemosyne-memory")
+    except md.PackageNotFoundError:
+        expected_version = "unknown"
+    assert status["mnemosyne_version"] == expected_version
+    if expected_version == "unknown":
+        assert status["streaming_supported"] is False
+        assert status["deltasync_supported"] is False
+        assert status["live_enabled"] is False
+        assert status["event_types"] == []
+        assert status["deltasync_tables"] == []
+    else:
+        assert status["streaming_supported"] is True
+        assert status["deltasync_supported"] is True
+        assert status["live_enabled"] is True
+        assert "MEMORY_ADDED" in status["event_types"]
+        assert "MEMORY_UPDATED" in status["event_types"]
+        assert status["deltasync_tables"] == ["working_memory", "episodic_memory"]
+        assert {"sync_to", "sync_from", "compute_delta", "apply_delta"} <= set(status["deltasync_methods"])
+        assert status["realtime_generation"] in {"mnemosyne-2.6", "mnemosyne-3.x"}
+        assert status["stream_api"]["deltasync"] is True
+    assert status["db_modified_at"]
+    assert "posting_credential" not in str(status)
+
+
+def test_realtime_event_snapshot_includes_private_dashboard_content_but_not_metadata_json(tmp_path):
+    db = tmp_path / "mnemosyne.db"
+    make_db(db)
+    events = DashboardStore(db).realtime_event_snapshot(limit=6)
+
+    assert events
+    assert all(event["event_type"] == "MEMORY_SNAPSHOT" for event in events)
+    assert all(event["memory_id"] for event in events)
+    assert all(event["memory_kind"] in {"working", "episodic"} for event in events)
+    assert all("content" in event for event in events)
+    assert "YC prefers local-only WhatsApp memory" in str(events)
+    assert all("metadata_json" not in event for event in events)
+
+
+def test_realtime_event_delta_detects_cross_process_db_writes(tmp_path):
+    db = tmp_path / "mnemosyne.db"
+    make_db(db)
+    store = DashboardStore(db)
+    initial = store.realtime_event_snapshot(limit=25)
+    seen = {event["memory_id"] for event in initial}
+
+    con = sqlite3.connect(db)
+    con.execute(
+        "INSERT INTO working_memory(id,content,source,timestamp,session_id,importance,scope,veracity) VALUES (?,?,?,?,?,?,?,?)",
+        ("w-live", "Realtime DB polling test memory", "test", "2026-05-12T23:59:59", "s-live", 0.8, "global", "tool"),
+    )
+    con.commit()
+    con.close()
+
+    delta = store.realtime_event_delta(seen_ids=seen, limit=25)
+
+    assert [event["memory_id"] for event in delta] == ["w-live"]
+    assert delta[0]["event_type"] == "MEMORY_ADDED"
+    assert delta[0]["content"] == "Realtime DB polling test memory"
+
+
+def test_realtime_event_delta_detects_updates_recalls_invalidations_and_consolidations(tmp_path):
+    db = tmp_path / "mnemosyne.db"
+    make_db(db)
+    store = DashboardStore(db)
+    initial = store.realtime_event_snapshot(limit=25)
+    seen_state = {event["memory_id"]: event["live_signature"] for event in initial}
+
+    con = sqlite3.connect(db)
+    con.execute(
+        "UPDATE working_memory SET content=?, timestamp=? WHERE id='w1'",
+        ("YC strongly prefers local-only WhatsApp memory", "2026-05-12T23:55:00"),
+    )
+    con.execute(
+        "UPDATE working_memory SET recall_count=recall_count+1, last_recalled=? WHERE id='w2'", ("2026-05-12T23:56:00",)
+    )
+    con.execute("UPDATE working_memory SET superseded_by=? WHERE id='w3'", ("w3-new",))
+    con.execute(
+        "INSERT INTO episodic_memory(id,content,source,timestamp,session_id,importance,scope,summary_of,veracity) VALUES (?,?,?,?,?,?,?,?,?)",
+        (
+            "e-live-consolidated",
+            "Consolidated dashboard memory activity",
+            "consolidation",
+            "2026-05-12T23:57:00",
+            "s6",
+            0.6,
+            "session",
+            "w4",
+            "tool",
+        ),
+    )
+    con.commit()
+    con.close()
+
+    delta = store.realtime_event_delta(seen_ids=seen_state, limit=25)
+    by_id = {event["memory_id"]: event for event in delta}
+
+    assert by_id["w1"]["event_type"] == "MEMORY_UPDATED"
+    assert by_id["w2"]["event_type"] == "MEMORY_RECALLED"
+    assert by_id["w3"]["event_type"] == "MEMORY_INVALIDATED"
+    assert by_id["e-live-consolidated"]["event_type"] == "MEMORY_CONSOLIDATED"
+    assert by_id["w3"]["status"] == "superseded"
+    assert all("metadata_json" not in event for event in delta)
+
+
+def test_pattern_insights_surface_recurring_topics_entities_and_sources(tmp_path):
+    db = tmp_path / "mnemosyne.db"
+    make_db(db)
+    store = DashboardStore(db)
+
+    insights = store.pattern_insights(limit=5)
+
+    assert insights["read_only"] is True
+    assert insights["summary"]["indexed_memories"] >= 1
+    assert insights["provider"] == "mnemosyne.core.PatternDetector"
+    assert "mnemosyne_summary" in insights
+    assert {"temporal_patterns", "content_patterns", "sequence_patterns"} <= set(insights["mnemosyne_summary"])
+    assert "context_domains" in insights
+    assert all(item["label"] != "Other" for item in insights["context_domains"])
+    assert any(item["label"] == "Unclassified" for item in insights["context_domains"])
+    assert any(item["label"] == "Privacy rules" for item in insights["context_domains"])
+    assert any(item["label"] == "Privacy rule" for item in insights["memory_types"])
+    assert any(item["label"] == "Relationship" for item in insights["memory_types"])
+    assert any(item["label"] == "Direct memory" for item in insights["origins"])
+    assert insights["signals"] == []
+
+
+def test_realtime_event_snapshot_orders_newest_first(tmp_path):
+    db = tmp_path / "mnemosyne.db"
+    make_db(db)
+    events = DashboardStore(db).realtime_event_snapshot(limit=6)
+    timestamps = [event["timestamp"] for event in events]
+
+    assert timestamps == sorted(timestamps, reverse=True)
+    assert events[0]["memory_id"] == "e2"

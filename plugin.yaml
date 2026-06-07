@@ -1,0 +1,9 @@
+name: mnemosyne-native-dashboard
+version: "0.1.0"
+description: "Native Hermes dashboard for browsing Mnemosyne memories, triples, stats, and history."
+author: Agent Hammy
+requires_env: []
+provides_tools:
+  - mnemosyne_native_dashboard_status
+  - mnemosyne_native_dashboard_config
+provides_hooks: []
