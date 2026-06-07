@@ -5,6 +5,12 @@ import { t } from '../utils/i18n';
 
 const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
+const VERACITY_COLOR: Record<string, string> = {
+  stated: '#065f46',
+  inferred: '#1e3a8a',
+  tool: '#581c87',
+  imported: '#78350f',
+};
 
 interface TimelineGroup {
   key: string;
@@ -114,7 +120,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ onInspectMemory }) => {
                     >
                       <div style={{ fontSize: '13px', lineHeight: '1.5', marginBottom: '6px' }}>{event.preview || event.title || event.item?.content || 'No preview available'}</div>
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <Badge>{event.item?.veracity || event.type || 'event'}</Badge>
+                        <Badge style={{ background: VERACITY_COLOR[String(event.item?.veracity || event.type || 'event').toLowerCase()] || MG(0.1) }}>{event.item?.veracity || event.type || 'event'}</Badge>
                         {event.session_id && (
                           <span
                             onClick={e => { e.stopPropagation(); handleOpenSession(event.session_id!); }}

@@ -5,6 +5,12 @@ import { t } from '../utils/i18n';
 
 const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
+const VERACITY_COLOR: Record<string, string> = {
+  stated: '#065f46',
+  inferred: '#1e3a8a',
+  tool: '#581c87',
+  imported: '#78350f',
+};
 
 interface MemoryItem {
   id: string;
@@ -382,7 +388,7 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginBottom: '8px' }}>
                     <Badge>{m.memory_kind || 'memory'}</Badge>
                     <Badge>{m.status || 'active'}</Badge>
-                    <Badge>{m.veracity}</Badge>
+                    <Badge style={{ background: VERACITY_COLOR[String(m.veracity).toLowerCase()] || MG(0.1) }}>{m.veracity}</Badge>
                     {m.degradation_label && <Badge>{m.degradation_label}</Badge>}
                     <span style={{ fontSize: '11px', color: MG(0.4) }}>importance:{safeNumber(m.importance, 2)}</span>
                     {m.session_id && (

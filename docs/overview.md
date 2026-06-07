@@ -1,37 +1,77 @@
-# Mnemosyne Dashboard Overview
+# Overview Tab
 
-The **Overview** tab serves as the central hub of the Mnemosyne Native Dashboard. It provides high-level metrics, multidimensional breakdowns of memory storage, and quick navigation paths.
+The Overview tab provides a real-time system health snapshot of the Mnemosyne memory store, giving a bird's-eye view of memory counts, degradation state, and live ingestion activity.
 
-## Key Metrics (Stat Cards)
+---
 
-The dashboard presents six core metrics at the top, each functioning as a call-to-action (CTA) button to filter or navigate to the corresponding tab:
+## Features
 
-1. **Working Memory**: Shows the count of active short-term thoughts. Clicking it filters the **Memories** list to `kind: working`.
-2. **Episodic Memory**: Shows archived session memories. Clicking it filters the **Memories** list to `kind: episodic`.
-3. **Needs Review**: Displays the count of contaminated or low-confidence memories. Clicking it switches to the **Review** tab.
-4. **Degraded**: Displays the count of decayed episodic memory summaries. Clicking it switches to the **Lifecycle** tab.
-5. **Triples**: Displays the count of extracted semantic facts. Clicking it switches to the **Graph** tab.
-6. **Consolidations**: Displays the count of episodic summaries built. Clicking it switches to the **History** (timeline) tab.
+- **7 stat cards** summarising key memory system metrics
+- **5 breakdown mini-cards** showing distribution slices of the memory store
+- **Live Memory Log** streaming the 25 most recent memory records
+- Click-through navigation — every card and row is interactive
 
-## Storage Breakdowns
+---
 
-Beneath the metrics, five distinct breakdown panels analyze the memory database:
+## UI Layout
 
-* **Trust Mix (Veracity)**: Grouping of memories by confidence preset (e.g., `stated`, `inferred`, `tool`, `imported`, `unknown`). Clicking any veracity label filters the memories by that veracity.
-* **Lifecycle (Degradation)**: Grouping of episodic memories by decay tiers (`hot`, `warm`, `cold`). Clicking any tier filters the memories by that tier.
-* **Sources**: Lists top creators of memories (e.g., `user`, `assistant`, `agent`). Clicking a source filters the memories.
-* **Scopes**: Grouping by memory scope (e.g., `global`, `session`). Clicking a scope filters the memories.
-* **Top Sessions**: Showcases the active agent interaction sessions sorted by memory volume. Session IDs are shortened for readability (e.g., `hermes_2…123456`). Clicking a session ID opens the **Session Details Inspector**.
+### Stat Cards
 
-## Live Memory Log
+| Card | Description |
+|---|---|
+| **Working Memory** | Short-term active thoughts (BEAM hot tier) |
+| **Episodic Memory** | Archived session memories (BEAM warm/cold tier) |
+| **Scratchpad** | Reasoning workspace entries |
+| **Needs Review** | Contaminated or unverified memories awaiting triage |
+| **Degraded** | Memories in a degraded lifecycle tier |
+| **Triples** | Total KG (knowledge graph) subject–predicate–object facts |
+| **Consolidations** | Total consolidation events recorded |
 
-The **Live Memory Log** displays a real-time stream of the 25 latest memories recorded in the database. Each log entry highlights:
-- The text content snippet.
-- A veracity badge.
-- An interactive session chip.
-- Relevance/importance score.
-- Relative creation time (e.g., `5m ago`, `2d ago`).
+### Breakdown Mini-Cards
 
-## Navigation & Filtering Flow
+| Card | Breakdown type |
+|---|---|
+| **Trust Mix** | Distribution of trust levels across the store |
+| **Lifecycle** | Count per lifecycle tier (active / degraded / expired) |
+| **Sources** | Memory counts grouped by source label |
+| **Scopes** | Memory counts grouped by scope |
+| **Top Sessions** | Most active sessions by memory count |
 
-To ensure smooth transitions, all filter-based CTAs on the Overview tab reset unrelated memory filters before applying the new filter. This guarantees that clicking "Working Memory" or a specific "Source" takes you to a clean, correctly filtered list on the **Memories** tab.
+### Live Memory Log
+
+Scrollable feed of the 25 most recently created memories, each row showing source, scope, veracity badge, and a content preview.
+
+---
+
+## CTAs / Interactions
+
+| Trigger | Action |
+|---|---|
+| Click **Working Memory** card | Navigates to Memories tab, filtered to `kind=working` |
+| Click **Episodic Memory** card | Navigates to Memories tab, filtered to `kind=episodic` |
+| Click **Needs Review** card | Navigates to Review tab |
+| Click **Degraded** card | Navigates to Lifecycle tab |
+| Click **Triples** card | Navigates to Graph tab |
+| Click **Consolidations** card | Navigates to History tab |
+| Click any breakdown row | Navigates to Memories tab with corresponding filter applied |
+| Click a **Top Session** row | Opens Session inspector modal |
+| Click a memory in **Live Memory Log** | Opens Memory inspector modal |
+
+---
+
+## Architecture Notes
+
+The stat cards map directly to the **BEAM memory model tiers**:
+
+- **Working Memory** — short-lived, high-priority active context
+- **Episodic Memory** — persisted session snapshots promoted from working memory
+- **Scratchpad** — ephemeral reasoning workspace; not promoted to episodic
+
+---
+
+## Data Sources
+
+```
+GET /api/plugins/mnemosyne-native-dashboard/stats
+GET /api/plugins/mnemosyne-native-dashboard/memories?limit=25
+```

@@ -5,6 +5,12 @@ import { t } from '../utils/i18n';
 
 const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
+const VERACITY_COLOR: Record<string, string> = {
+  stated: '#065f46',
+  inferred: '#1e3a8a',
+  tool: '#581c87',
+  imported: '#78350f',
+};
 
 interface MemoryItem {
   id: string;
@@ -183,7 +189,7 @@ export const TodayTab: React.FC<{
                       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
                         <span style={{ fontSize: '13px' }}>{m.content}</span>
                         <div style={{ display: 'flex', gap: '8px', marginTop: '4px', alignItems: 'center' }}>
-                          <Badge>{m.veracity}</Badge>
+                          <Badge style={{ background: VERACITY_COLOR[String(m.veracity).toLowerCase()] || MG(0.1) }}>{m.veracity}</Badge>
                           {m.session_id && (
                             <span
                               onClick={e => { e.stopPropagation(); onInspectSession(m.session_id!); }}
@@ -192,7 +198,7 @@ export const TodayTab: React.FC<{
                               session:{shortId(m.session_id)}
                             </span>
                           )}
-                          <span style={{ fontSize: '10px', color: MG(0.4) }}>importance:{safeNumber(m.importance, 2)}</span>
+                          <span style={{ fontSize: '10px', color: MG(0.4) }}>imp:{safeNumber(m.importance, 2)}</span>
                         </div>
                       </div>
                     </div>
@@ -220,7 +226,7 @@ export const TodayTab: React.FC<{
                       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
                         <span style={{ fontSize: '13px' }}>{m.content}</span>
                         <div style={{ display: 'flex', gap: '8px', marginTop: '4px', alignItems: 'center' }}>
-                          <Badge>{m.veracity}</Badge>
+                          <Badge style={{ background: VERACITY_COLOR[String(m.veracity).toLowerCase()] || MG(0.1) }}>{m.veracity}</Badge>
                           {m.session_id && (
                             <span
                               onClick={e => { e.stopPropagation(); onInspectSession(m.session_id!); }}
