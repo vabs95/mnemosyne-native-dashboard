@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, Button, Input, Select, SelectOption } from '@hermes/sdk';
-import { formatDateLabel, safeNumber } from '../utils/format';
+import { formatDateLabel, safeNumber, shortId } from '../utils/format';
 
 const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
@@ -229,7 +229,7 @@ export const MemoriesTab: React.FC<MemoriesTabProps> = ({ onInspectMemory, onIns
                   <Select value={filters.session_id || ''} onValueChange={(val: string) => handleFilterChange('session_id', val)}>
                     <SelectOption value="">All Sessions</SelectOption>
                     {(statsData?.by_session || []).map(s => (
-                      <SelectOption key={s.session_id} value={s.session_id}>{s.session_id.slice(0, 15)}...</SelectOption>
+                      <SelectOption key={s.session_id} value={s.session_id}>{shortId(s.session_id)}</SelectOption>
                     ))}
                   </Select>
                 </div>
@@ -266,7 +266,7 @@ export const MemoriesTab: React.FC<MemoriesTabProps> = ({ onInspectMemory, onIns
                       onClick={e => { e.stopPropagation(); onInspectSession(m.session_id!); }}
                       style={{ fontSize: '10px', fontFamily: 'var(--theme-font-mono)', color: MG(0.6), cursor: 'pointer', textDecoration: 'underline' }}
                     >
-                      session:{m.session_id.slice(0, 8)}
+                      session:{shortId(m.session_id)}
                     </span>
                   )}
                 </div>

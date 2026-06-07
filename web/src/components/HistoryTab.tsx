@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Button, Badge } from '@hermes/sdk';
-import { formatDateTimeLabel, safeNumber } from '../utils/format';
+import { formatDateTimeLabel, safeNumber, shortId } from '../utils/format';
 
 const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
@@ -119,7 +119,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ onInspectMemory }) => {
                             onClick={e => { e.stopPropagation(); handleOpenSession(event.session_id!); }}
                             style={{ fontSize: '10px', fontFamily: 'var(--theme-font-mono)', color: MG(0.6), cursor: 'pointer', textDecoration: 'underline' }}
                           >
-                            session:{event.session_id.slice(0, 8)}
+                            session:{shortId(event.session_id)}
                           </span>
                         )}
                         <span style={{ fontSize: '10px', color: MG(0.4), fontFamily: 'var(--theme-font-mono)' }}>{formatDateTimeLabel(event.timestamp || event.item?.created_at, 'unknown')}</span>
@@ -188,7 +188,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ onInspectMemory }) => {
                   >
                     <div style={{ fontSize: '12px', lineHeight: '1.5', marginBottom: '6px' }}>{c.summary}</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: MG(0.4), fontFamily: 'var(--theme-font-mono)' }}>
-                      <span style={{ textDecoration: 'underline' }}>session:{c.session_id.slice(0, 8)}</span>
+                      <span style={{ textDecoration: 'underline' }}>session:{shortId(c.session_id)}</span>
                       <span>{new Date(c.created_at).toLocaleDateString()}</span>
                     </div>
                   </div>

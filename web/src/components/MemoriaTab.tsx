@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, Button, Input } from '@hermes/sdk';
-import { safeNumber } from '../utils/format';
+import { safeNumber, shortId } from '../utils/format';
 
 const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
@@ -108,7 +108,7 @@ export const MemoriaTab: React.FC<{
               onClick={() => onInspectSession(item.session_id)}
               style={{ fontSize: '10px', fontFamily: 'var(--theme-font-mono)', color: MG(0.6), cursor: 'pointer', textDecoration: 'underline' }}
             >
-              session:{item.session_id.slice(0, 8)}
+              session:{shortId(item.session_id)}
             </span>
           )}
         </div>
@@ -131,7 +131,7 @@ export const MemoriaTab: React.FC<{
               onClick={() => onInspectSession(item.session_id)}
               style={{ fontSize: '10px', fontFamily: 'var(--theme-font-mono)', color: MG(0.6), cursor: 'pointer', textDecoration: 'underline' }}
             >
-              session:{item.session_id.slice(0, 8)}
+              session:{shortId(item.session_id)}
             </span>
           )}
         </div>
@@ -155,7 +155,7 @@ export const MemoriaTab: React.FC<{
               onClick={() => onInspectSession(item.session_id)}
               style={{ fontSize: '10px', fontFamily: 'var(--theme-font-mono)', color: MG(0.6), cursor: 'pointer', textDecoration: 'underline' }}
             >
-              session:{item.session_id.slice(0, 8)}
+              session:{shortId(item.session_id)}
             </span>
           )}
         </div>
@@ -257,7 +257,7 @@ export const MemoriaTab: React.FC<{
                           onClick={() => onInspectSession(s.session_id)}
                           style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', cursor: 'pointer' }}
                         >
-                          <span style={{ textDecoration: 'underline', fontFamily: 'var(--theme-font-mono)' }}>{s.session_id.slice(0, 24)}</span>
+                          <span style={{ textDecoration: 'underline', fontFamily: 'var(--theme-font-mono)' }}>{shortId(s.session_id)}</span>
                           <strong>{s.count}</strong>
                         </div>
                       ))

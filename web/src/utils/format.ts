@@ -28,3 +28,9 @@ export function formatRelativeTime(value: unknown, fallback = 'unknown'): string
   const diffDays = Math.floor(diffHours / 24);
   return `${diffDays}d ago`;
 }
+
+export function shortId(value: unknown, head = 8, tail = 6): string {
+  const s = String(value || '').trim();
+  return s.length > head + tail + 1 ? `${s.slice(0, head)}…${s.slice(-tail)}` : s;
+}
+

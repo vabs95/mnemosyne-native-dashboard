@@ -77,9 +77,22 @@ const MnemosyneDashboard: React.FC = () => {
   });
 
   const handleApplyFilters = (filters: any, setActiveTabFn: (tab: string) => void) => {
-    setMemoryFilters((prev: any) => ({ ...prev, ...filters }));
+    setMemoryFilters({
+      q: '',
+      kind: 'all',
+      status: 'active',
+      sort: 'recent',
+      source: '',
+      scope: '',
+      session_id: '',
+      veracity: '',
+      degradation_tier: '',
+      trust_preset: '',
+      ...filters
+    });
     setActiveTabFn('memories');
   };
+
 
   useEffect(() => {
     fetchJSON(`${API}/config`).then(res => {

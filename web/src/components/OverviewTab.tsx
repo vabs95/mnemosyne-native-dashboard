@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, timeAgo, Button } from '@hermes/sdk';
-import { formatRelativeTime, safeNumber } from '../utils/format';
+import { formatRelativeTime, safeNumber, shortId } from '../utils/format';
 
 const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = 'rgba(234,234,234,'; // midground base shorthand
@@ -90,17 +90,6 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
         <StatCard title="Triples" count={counts.triples} desc="Extracted semantic facts" icon="◎" onClick={() => onNavigateToTab('graph')} />
         <StatCard title="Consolidations" count={counts.consolidation_log} desc="Episodic summaries built" icon="✦" onClick={() => onNavigateToTab('activity')} />
       </div>
-
-      {/* Quick Actions Panel */}
-      <Card style={{ background: 'rgba(234,234,234,0.02)' }}>
-        <CardContent style={{ padding: '12px 20px', display: 'flex', gap: '12px', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '11px', textTransform: 'uppercase', color: 'rgba(234,234,234,0.4)', letterSpacing: '0.08em', marginRight: '8px' }}>Quick Actions</span>
-          <Button onClick={() => onApplyFilters({})} primary style={{ fontSize: '12px' }}>Browse memories</Button>
-          <Button onClick={() => onApplyFilters({ q: ' ' })} ghost style={{ fontSize: '12px' }}>Search everything</Button>
-          <Button onClick={() => onNavigateToTab('activity')} ghost style={{ fontSize: '12px' }}>Latest activity</Button>
-          <Button onClick={() => onNavigateToTab('graph')} ghost style={{ fontSize: '12px' }}>Open graph</Button>
-        </CardContent>
-      </Card>
 
       {/* 5 Breakdowns Row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px' }}>
@@ -198,7 +187,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
                   onClick={() => onInspectSession(session_id)}
                   style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline' }}
                 >
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--theme-font-mono)' }} title={session_id}>{session_id.slice(0, 8)}</span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--theme-font-mono)' }} title={session_id}>{shortId(session_id)}</span>
                   <Badge>{String(count)}</Badge>
                 </div>
               ))}
@@ -240,7 +229,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
                         onClick={e => { e.stopPropagation(); onInspectSession(m.session_id!); }}
                         style={{ fontSize: '11px', fontFamily: 'var(--theme-font-mono)', color: `${MG}0.4)`, cursor: 'pointer', textDecoration: 'underline' }}
                       >
-                        session:{m.session_id.slice(0, 8)}
+                        session:{shortId(m.session_id)}
                       </span>
                     )}
                     <span style={{ fontSize: '11px', color: `${MG}0.4)` }}>importance:{safeNumber(m.importance, 2, 'n/a')}</span>

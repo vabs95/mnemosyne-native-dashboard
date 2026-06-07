@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, Button } from '@hermes/sdk';
-import { formatDateTimeLabel, safeNumber } from '../utils/format';
+import { formatDateTimeLabel, safeNumber, shortId } from '../utils/format';
 
 const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
@@ -152,7 +152,7 @@ export const LifecycleTab: React.FC<{
                           onClick={() => onInspectSession(m.session_id!)}
                           style={{ fontFamily: 'var(--theme-font-mono)', color: MG(0.6), cursor: 'pointer', textDecoration: 'underline' }}
                         >
-                          session:{m.session_id.slice(0, 8)}
+                          session:{shortId(m.session_id)}
                         </span>
                       )}
                       <span style={{ color: MG(0.4) }}>{formatDateTimeLabel(m.created_at)}</span>
