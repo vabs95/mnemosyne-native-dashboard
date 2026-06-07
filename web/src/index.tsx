@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { fetchJSON, cn, Tabs, TabsList, TabsTrigger } from '@hermes/sdk';
+import { fetchJSON, cn, Tabs, TabsList, TabsTrigger, Badge } from '@hermes/sdk';
 
 import { OverviewTab } from './components/OverviewTab';
 import { TodayTab } from './components/TodayTab';
 import { VisualiserTab } from './components/VisualiserTab';
+import { ReviewTab } from './components/ReviewTab';
 import { MemoriesTab } from './components/MemoriesTab';
 import { ContextBankTab } from './components/ContextBankTab';
+import { LifecycleTab } from './components/LifecycleTab';
 import { GraphTab } from './components/GraphTab';
+import { MemoriaTab } from './components/MemoriaTab';
 import { HistoryTab } from './components/HistoryTab';
 import { SettingsTab } from './components/SettingsTab';
 import { Button } from '@hermes/sdk';
@@ -31,10 +34,13 @@ const API = '/api/plugins/mnemosyne-native-dashboard';
 const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'today', label: 'Today' },
-  { id: 'memories', label: 'Memories' },
-  { id: 'graph', label: 'Graph' },
   { id: 'visualiser', label: 'Visualiser' },
+  { id: 'review', label: 'Review' },
+  { id: 'memories', label: 'Memories' },
   { id: 'profile', label: 'Context Bank' },
+  { id: 'lifecycle', label: 'Lifecycle' },
+  { id: 'graph', label: 'Graph' },
+  { id: 'memoria', label: 'MEMORIA' },
   { id: 'activity', label: 'History' },
   { id: 'settings', label: 'Settings' },
 ];
@@ -51,6 +57,30 @@ const MnemosyneDashboard: React.FC = () => {
   const [inspectedMemory, setInspectedMemory] = useState<MemoryItem | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
+  // Global Session Inspector State
+  const [inspectedSessionId, setInspectedSessionId] = useState<string | null>(null);
+  const [inspectedSession, setInspectedSession] = useState<any | null>(null);
+  const [loadingSession, setLoadingSession] = useState(false);
+
+  // Global Memory Filters State
+  const [memoryFilters, setMemoryFilters] = useState<any>({
+    q: '',
+    kind: 'all',
+    status: 'active',
+    sort: 'recent',
+    source: '',
+    scope: '',
+    session_id: '',
+    veracity: '',
+    degradation_tier: '',
+    trust_preset: '',
+  });
+
+  const handleApplyFilters = (filters: any, setActiveTabFn: (tab: string) => void) => {
+    setMemoryFilters((prev: any) => ({ ...prev, ...filters }));
+    setActiveTabFn('memories');
+  };
+
   useEffect(() => {
     fetchJSON(`${API}/config`).then(res => {
       if (res?.config) setAdminMode(!!res.config.memory_admin_enabled);
@@ -59,12 +89,25 @@ const MnemosyneDashboard: React.FC = () => {
 
   useEffect(() => {
     if (!inspectedMemoryId) { setInspectedMemory(null); return; }
+    if (inspectedMemoryId === 'Consolidation detail' || inspectedMemoryId === 'Triple detail') {
+      return;
+    }
     setLoadingDetail(true);
     fetchJSON(`${API}/memory?id=${encodeURIComponent(inspectedMemoryId)}`)
       .then(res => { if (res?.item) setInspectedMemory(res.item); })
       .catch(() => {})
       .finally(() => setLoadingDetail(false));
   }, [inspectedMemoryId]);
+
+  // Fetch session details globally
+  useEffect(() => {
+    if (!inspectedSessionId) { setInspectedSession(null); return; }
+    setLoadingSession(true);
+    fetchJSON(`${API}/session?id=${encodeURIComponent(inspectedSessionId)}&limit=200`)
+      .then(res => { if (res) setInspectedSession(res); })
+      .catch(() => {})
+      .finally(() => setLoadingSession(false));
+  }, [inspectedSessionId]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: '100%', minHeight: 0 }}>
@@ -112,12 +155,61 @@ const MnemosyneDashboard: React.FC = () => {
 
               {/* Tab content area */}
               <div style={{ minHeight: 0 }}>
-                {tab === 'overview' && <OverviewTab onInspectMemory={setInspectedMemoryId} onNavigateToTab={setActiveValue} />}
-                {tab === 'today' && <TodayTab />}
-                {tab === 'memories' && <MemoriesTab onInspectMemory={setInspectedMemoryId} adminMode={adminMode} />}
-                {tab === 'graph' && <GraphTab onInspectMemory={setInspectedMemoryId} onNavigateToTab={setActiveValue} />}
+                {tab === 'overview' && (
+                  <OverviewTab
+                    onInspectMemory={setInspectedMemoryId}
+                    onInspectSession={setInspectedSessionId}
+                    onNavigateToTab={setActiveValue}
+                    onApplyFilters={(f) => handleApplyFilters(f, setActiveValue)}
+                  />
+                )}
+                {tab === 'today' && (
+                  <TodayTab
+                    onInspectMemory={setInspectedMemoryId}
+                    onInspectSession={setInspectedSessionId}
+                    onInspectJson={(data, title) => {
+                      setInspectedMemoryId(title || 'JSON');
+                      setInspectedMemory({
+                        id: title || 'JSON',
+                        content: JSON.stringify(data, null, 2),
+                        veracity: 'n/a',
+                        importance: 0,
+                        source: 'system',
+                        scope: 'global',
+                        status: 'n/a',
+                        created_at: '',
+                      });
+                    }}
+                  />
+                )}
                 {tab === 'visualiser' && <VisualiserTab onInspectMemory={setInspectedMemoryId} />}
+                {tab === 'review' && (
+                  <ReviewTab
+                    onInspectMemory={setInspectedMemoryId}
+                    onInspectSession={setInspectedSessionId}
+                    onApplyFilters={(f) => handleApplyFilters(f, setActiveValue)}
+                    adminMode={adminMode}
+                  />
+                )}
+                {tab === 'memories' && (
+                  <MemoriesTab
+                    onInspectMemory={setInspectedMemoryId}
+                    onInspectSession={setInspectedSessionId}
+                    adminMode={adminMode}
+                    filters={memoryFilters}
+                    setFilters={setMemoryFilters}
+                  />
+                )}
                 {tab === 'profile' && <ContextBankTab />}
+                {tab === 'lifecycle' && (
+                  <LifecycleTab
+                    onInspectMemory={setInspectedMemoryId}
+                    onInspectSession={setInspectedSessionId}
+                    onApplyFilters={(f) => handleApplyFilters(f, setActiveValue)}
+                  />
+                )}
+                {tab === 'graph' && <GraphTab onInspectMemory={setInspectedMemoryId} onNavigateToTab={setActiveValue} />}
+                {tab === 'memoria' && <MemoriaTab onInspectSession={setInspectedSessionId} />}
                 {tab === 'activity' && <HistoryTab onInspectMemory={setInspectedMemoryId} />}
                 {tab === 'settings' && <SettingsTab adminMode={adminMode} onToggleAdminMode={setAdminMode} />}
               </div>
@@ -195,7 +287,16 @@ const MnemosyneDashboard: React.FC = () => {
                     ].filter(([, v]) => v).map(([label, value]) => (
                       <div key={label as string} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid rgba(234,234,234,0.06)' }}>
                         <span>{label}</span>
-                        <span style={{ color: 'rgba(234,234,234,0.75)' }}>{value as string}</span>
+                        {label === 'Session' ? (
+                          <span
+                            onClick={() => { setInspectedMemoryId(null); setInspectedSessionId(value as string); }}
+                            style={{ color: 'rgba(234,234,234,0.75)', textDecoration: 'underline', cursor: 'pointer' }}
+                          >
+                            {value as string}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'rgba(234,234,234,0.75)' }}>{value as string}</span>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -217,6 +318,83 @@ const MnemosyneDashboard: React.FC = () => {
             {/* Footer */}
             <div style={{ padding: '12px 20px', borderTop: '1px solid rgba(234,234,234,0.1)', display: 'flex', justifyContent: 'flex-end' }}>
               <Button onClick={() => setInspectedMemoryId(null)}>Close</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Global Session Detail Modal */}
+      {inspectedSessionId && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+          backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center',
+          justifyContent: 'center', zIndex: 9999, padding: '16px',
+        }}>
+          <div style={{
+            width: '100%', maxWidth: '680px', maxHeight: '85vh',
+            background: 'var(--background-base)', border: '1px solid rgba(234,234,234,0.12)',
+            borderRadius: '4px', overflow: 'hidden', display: 'flex', flexDirection: 'column',
+          }}>
+            {/* Header */}
+            <div style={{
+              display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+              padding: '16px 20px', borderBottom: '1px solid rgba(234,234,234,0.1)',
+              background: 'rgba(234,234,234,0.03)',
+            }}>
+              <div>
+                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(234,234,234,0.4)', marginBottom: '4px' }}>Session Details</div>
+                <div style={{ fontSize: '11px', fontFamily: 'var(--theme-font-mono)', color: 'rgba(234,234,234,0.6)', wordBreak: 'break-all' }}>{inspectedSessionId}</div>
+              </div>
+              <button
+                onClick={() => setInspectedSessionId(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(234,234,234,0.5)', fontSize: '18px', lineHeight: 1, padding: '0 0 0 12px' }}
+              >✕</button>
+            </div>
+
+            {/* Content */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+              {loadingSession ? (
+                <div style={{ textAlign: 'center', color: 'rgba(234,234,234,0.4)', padding: '40px' }}>Loading session details...</div>
+              ) : inspectedSession ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ fontSize: '12px', color: 'rgba(234,234,234,0.5)', fontFamily: 'var(--theme-font-mono)', display: 'flex', gap: '16px', borderBottom: '1px solid rgba(234,234,234,0.08)', paddingBottom: '10px' }}>
+                    <span>Memories: <strong>{inspectedSession.counts?.memories ?? 0}</strong></span>
+                    <span>Facts: <strong>{inspectedSession.counts?.triples ?? 0}</strong></span>
+                    <span>Consolidations: <strong>{inspectedSession.counts?.consolidations ?? 0}</strong></span>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {inspectedSession.events && inspectedSession.events.length > 0 ? (
+                      inspectedSession.events.map((event: any, idx: number) => (
+                        <div
+                          key={idx}
+                          onClick={() => event.item?.id && setInspectedMemoryId(event.item.id)}
+                          style={{
+                            padding: '10px 12px', background: 'rgba(234,234,234,0.03)', border: '1px solid rgba(234,234,234,0.07)',
+                            borderRadius: '4px', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '4px'
+                          }}
+                        >
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            <Badge>{event.type}</Badge>
+                            <span style={{ fontSize: '10px', color: 'rgba(234,234,234,0.4)' }}>{formatDateTimeLabel(event.timestamp)}</span>
+                          </div>
+                          <div style={{ fontSize: '12px', fontWeight: 600 }}>{event.title}</div>
+                          <div style={{ fontSize: '12px', color: 'rgba(234,234,234,0.7)' }}>{event.preview}</div>
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ textAlign: 'center', padding: '40px', color: 'rgba(234,234,234,0.35)', fontSize: '12px' }}>No session events found.</div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', color: '#f87171', padding: '40px', fontSize: '13px' }}>Session could not be loaded.</div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '12px 20px', borderTop: '1px solid rgba(234,234,234,0.1)', display: 'flex', justifyContent: 'flex-end' }}>
+              <Button onClick={() => setInspectedSessionId(null)}>Close</Button>
             </div>
           </div>
         </div>
