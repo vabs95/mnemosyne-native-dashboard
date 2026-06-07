@@ -6,7 +6,7 @@
     "build": "node esbuild.js"
   },
   "devDependencies": {
-    "esbuild": "^0.20.1",
+    "esbuild": "^0.25.0",
     "typescript": "^5.3.3",
     "@types/react": "^18.2.55"
   }
