@@ -910,29 +910,31 @@ class DashboardStore:
         self, q: str = "", subject: str = "", predicate: str = "", object_: str = "", limit: int = 200
     ) -> list[dict[str, Any]]:
         limit = max(1, min(int(limit or 200), 1000))
-        where = []
-        params: list[Any] = []
-        if q:
-            pattern = self._prefix_pattern(q)
-            where.append(
-                "(COALESCE(subject, '') || ' ' || COALESCE(predicate, '') || ' ' || COALESCE(object, '') || ' ' || COALESCE(source, '')) REGEXP ?"
-            )
-            params.append(pattern)
-        for col, value in [("subject", subject), ("predicate", predicate), ("object", object_)]:
-            if value:
-                where.append(f"{col} REGEXP ?")
-                params.append(self._prefix_pattern(value))
-        clause = "WHERE " + " AND ".join(where) if where else ""
         with self.connect() as con:
             if "triples" not in self._tables(con):
                 return []
-            return [
-                dict(r)
-                for r in con.execute(
-                    f"SELECT id, subject, predicate, object, valid_from, valid_until, source, confidence, created_at FROM triples {clause} ORDER BY created_at DESC LIMIT ?",
-                    [*params, limit],
-                )
+            query = """
+                SELECT id, subject, predicate, object, valid_from, valid_until, source, confidence, created_at
+                FROM triples
+                WHERE (? = 0 OR (COALESCE(subject, '') || ' ' || COALESCE(predicate, '') || ' ' || COALESCE(object, '') || ' ' || COALESCE(source, '')) REGEXP ?)
+                  AND (? = 0 OR subject REGEXP ?)
+                  AND (? = 0 OR predicate REGEXP ?)
+                  AND (? = 0 OR object REGEXP ?)
+                ORDER BY created_at DESC
+                LIMIT ?
+            """
+            params = [
+                1 if q else 0,
+                self._prefix_pattern(q) if q else "",
+                1 if subject else 0,
+                self._prefix_pattern(subject) if subject else "",
+                1 if predicate else 0,
+                self._prefix_pattern(predicate) if predicate else "",
+                1 if object_ else 0,
+                self._prefix_pattern(object_) if object_ else "",
+                limit,
             ]
+            return [dict(r) for r in con.execute(query, params)]
 
     def graph(self, q: str = "", limit: int = 300) -> dict[str, Any]:
         triples = self.triples(q=q, limit=limit)
