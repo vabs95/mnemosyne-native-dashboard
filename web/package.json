@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "React-based frontend tab for Hermes Agent web dashboard",
   "scripts": {
-    "build": "node esbuild.js"
+    "build": "node esbuild.js",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "esbuild": "^0.20.1",
