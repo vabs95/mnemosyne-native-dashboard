@@ -41,21 +41,41 @@ const StatCard: React.FC<{ title: string; count: number; desc: string; icon: str
     style={{
       cursor: onClick ? 'pointer' : 'default',
       transition: 'background 0.15s, border-color 0.15s',
-      padding: '12px 14px',
+      padding: '12px',
       borderRadius: '6px',
       border: `1px solid ${MG(0.1)}`,
       background: MG(0.03),
+      minHeight: '104px',
+      minWidth: 0,
     }}
     onMouseEnter={(e: any) => { if (onClick) e.currentTarget.style.background = MG(0.06); }}
     onMouseLeave={(e: any) => { if (onClick) e.currentTarget.style.background = MG(0.03); }}
   >
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-      <div>
-        <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: MG(0.45), marginBottom: '6px' }}>{title}</div>
-        <div style={{ fontSize: '26px', fontWeight: 700, lineHeight: 1 }}>{count.toLocaleString()}</div>
-        <div style={{ fontSize: '11px', color: MG(0.4), marginTop: '6px' }}>{desc}</div>
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 32px', alignItems: 'start', gap: '10px' }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: MG(0.45), marginBottom: '7px', lineHeight: 1.25, overflowWrap: 'anywhere' }}>{title}</div>
+        <div style={{ fontSize: '26px', fontWeight: 700, lineHeight: 1.05, fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}>{count.toLocaleString()}</div>
+        <div style={{ fontSize: '11px', color: MG(0.4), marginTop: '7px', lineHeight: 1.35, overflowWrap: 'anywhere' }}>{desc}</div>
       </div>
-      <div style={{ fontSize: '24px', opacity: 0.5 }}>{icon}</div>
+      <div
+        aria-hidden="true"
+        style={{
+          width: '32px',
+          height: '32px',
+          borderRadius: '6px',
+          display: 'grid',
+          placeItems: 'center',
+          background: MG(0.06),
+          color: MG(0.64),
+          fontSize: '18px',
+          lineHeight: 1,
+          flexShrink: 0,
+        }}
+      >
+        <span style={{ display: 'block', lineHeight: 1, transform: 'translateY(-1px)' }}>
+          {icon}
+        </span>
+      </div>
     </div>
   </div>
 );
@@ -92,7 +112,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
       {/* 7 Stat Cards Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '10px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(148px, 1fr))', gap: '10px' }}>
         <StatCard title={t('overview.workingMemory')} count={counts.working_memory} desc={t('overview.workingDesc')} icon="🧠" onClick={() => onApplyFilters({ kind: 'working' })} />
         <StatCard title={t('overview.episodicMemory')} count={counts.episodic_memory} desc={t('overview.episodicDesc')} icon="📖" onClick={() => onApplyFilters({ kind: 'episodic' })} />
         <StatCard title={t('overview.scratchpad')} count={counts.scratchpad ?? 0} desc={t('overview.scratchpadDesc')} icon="📝" />
@@ -119,7 +139,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
                   <Badge>{String(count)}</Badge>
                 </div>
               ))}
-              {!stats?.by_veracity?.length && <div style={{ color: `${MG}0.35)`, fontSize: '11px' }}>{t('overview.noData')}</div>}
+              {!stats?.by_veracity?.length && <div style={{ color: MG(0.35), fontSize: '11px' }}>{t('overview.noData')}</div>}
             </div>
           </CardContent>
         </Card>
@@ -142,7 +162,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
                   </div>
                 );
               })}
-              {!stats?.by_degradation?.length && <div style={{ color: `${MG}0.35)`, fontSize: '11px' }}>{t('overview.noData')}</div>}
+              {!stats?.by_degradation?.length && <div style={{ color: MG(0.35), fontSize: '11px' }}>{t('overview.noData')}</div>}
             </div>
           </CardContent>
         </Card>
@@ -162,7 +182,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
                   <Badge>{String(count)}</Badge>
                 </div>
               ))}
-              {!stats?.by_source?.length && <div style={{ color: `${MG}0.35)`, fontSize: '11px' }}>{t('overview.noData')}</div>}
+              {!stats?.by_source?.length && <div style={{ color: MG(0.35), fontSize: '11px' }}>{t('overview.noData')}</div>}
             </div>
           </CardContent>
         </Card>
@@ -182,7 +202,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
                   <Badge>{String(count)}</Badge>
                 </div>
               ))}
-              {!stats?.by_scope?.length && <div style={{ color: `${MG}0.35)`, fontSize: '11px' }}>{t('overview.noData')}</div>}
+              {!stats?.by_scope?.length && <div style={{ color: MG(0.35), fontSize: '11px' }}>{t('overview.noData')}</div>}
             </div>
           </CardContent>
         </Card>
@@ -202,7 +222,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
                   <Badge>{String(count)}</Badge>
                 </div>
               ))}
-              {!stats?.by_session?.length && <div style={{ color: `${MG}0.35)`, fontSize: '11px' }}>{t('overview.noData')}</div>}
+              {!stats?.by_session?.length && <div style={{ color: MG(0.35), fontSize: '11px' }}>{t('overview.noData')}</div>}
             </div>
           </CardContent>
         </Card>
@@ -213,7 +233,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
         <CardHeader>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <CardTitle>{t('overview.liveMemoryLog')}</CardTitle>
-            <span style={{ fontSize: '11px', color: `${MG}0.4)` }}>{t('overview.showingLatest')}</span>
+            <span style={{ fontSize: '11px', color: MG(0.4) }}>{t('overview.showingLatest')}</span>
           </div>
         </CardHeader>
         <CardContent>
