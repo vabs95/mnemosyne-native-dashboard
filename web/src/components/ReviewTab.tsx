@@ -30,7 +30,7 @@ interface ReviewCard {
 }
 
 interface ReviewTabProps {
-  onInspectMemory: (id: string) => void;
+  onInspectMemory: (memory: any) => void;
   onInspectSession: (id: string) => void;
   onApplyFilters: (filters: any) => void;
   adminMode: boolean;
@@ -410,7 +410,7 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
                   </div>
 
                   <div
-                    onClick={() => onInspectMemory(m.id)}
+                    onClick={() => onInspectMemory(m)}
                     style={{ fontSize: '13px', lineHeight: '1.6', cursor: 'pointer', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
                   >
                     {m.content}

@@ -28,7 +28,7 @@ interface MemoryItem {
 }
 
 interface OverviewTabProps {
-  onInspectMemory: (id: string) => void;
+  onInspectMemory: (memory: any) => void;
   onInspectSession: (id: string) => void;
   onNavigateToTab: (tab: string) => void;
   onApplyFilters: (filters: any) => void;
@@ -210,7 +210,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
             {memories.map(m => (
               <div
                 key={m.id}
-                onClick={() => onInspectMemory(m.id)}
+                onClick={() => onInspectMemory(m)}
                 style={{
                   padding: '10px 12px', borderRadius: '4px',
                   background: 'rgba(234,234,234,0.03)', border: '1px solid rgba(234,234,234,0.07)',

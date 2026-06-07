@@ -25,7 +25,7 @@ interface StatsData {
 }
 
 interface MemoriesTabProps {
-  onInspectMemory: (id: string) => void;
+  onInspectMemory: (memory: any) => void;
   onInspectSession: (id: string) => void;
   adminMode: boolean;
   filters: any;
@@ -317,7 +317,7 @@ export const MemoriesTab: React.FC<MemoriesTabProps> = ({ onInspectMemory, onIns
               </div>
 
               <div style={{ display: 'flex', gap: '6px' }}>
-                <Button onClick={() => onInspectMemory(selected.id)} primary>View Details</Button>
+                <Button onClick={() => onInspectMemory(selected)} primary>View Details</Button>
               </div>
 
               {/* Maintenance tools (Admin only) */}

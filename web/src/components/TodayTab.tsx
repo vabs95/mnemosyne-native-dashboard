@@ -60,7 +60,7 @@ interface DigestData {
 }
 
 export const TodayTab: React.FC<{
-  onInspectMemory: (id: string) => void;
+  onInspectMemory: (memory: any) => void;
   onInspectSession: (id: string) => void;
   onInspectJson: (data: any, title?: string) => void;
 }> = ({ onInspectMemory, onInspectSession, onInspectJson }) => {
@@ -172,7 +172,7 @@ export const TodayTab: React.FC<{
                   digest.memories_added.map(m => (
                     <div
                       key={m.id}
-                      onClick={() => onInspectMemory(m.id)}
+                      onClick={() => onInspectMemory(m)}
                       style={{
                         padding: '10px 12px', borderRadius: '4px', cursor: 'pointer',
                         background: MG(0.03), border: `1px solid ${MG(0.07)}`,
@@ -209,7 +209,7 @@ export const TodayTab: React.FC<{
                   digest.memories_recalled.map(m => (
                     <div
                       key={m.id}
-                      onClick={() => onInspectMemory(m.id)}
+                      onClick={() => onInspectMemory(m)}
                       style={{
                         padding: '10px 12px', borderRadius: '4px', cursor: 'pointer',
                         background: MG(0.03), border: `1px solid ${MG(0.07)}`,

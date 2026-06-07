@@ -33,7 +33,7 @@ interface SessionDetail {
 }
 
 interface HistoryTabProps {
-  onInspectMemory: (id: string) => void;
+  onInspectMemory: (memory: any) => void;
 }
 
 /**
@@ -103,7 +103,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ onInspectMemory }) => {
                   {group.events.map(event => (
                     <div
                       key={event.id || `${group.key}-${event.timestamp}-${event.title}`}
-                      onClick={() => event.item?.id && onInspectMemory(event.item.id)}
+                      onClick={() => event.item && onInspectMemory(event.item)}
                       style={{
                         padding: '10px 12px', background: MG(0.03), border: `1px solid ${MG(0.07)}`,
                         borderRadius: '4px', cursor: 'pointer', transition: 'background 0.15s',
@@ -156,7 +156,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ onInspectMemory }) => {
                 {selectedSession.memories.map(m => (
                   <div
                     key={m.id}
-                    onClick={() => onInspectMemory(m.id)}
+                    onClick={() => onInspectMemory(m)}
                     style={{ padding: '10px', background: MG(0.04), border: `1px solid ${MG(0.08)}`, borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
                     onMouseEnter={e => (e.currentTarget.style.background = MG(0.08))}
                     onMouseLeave={e => (e.currentTarget.style.background = MG(0.04))}

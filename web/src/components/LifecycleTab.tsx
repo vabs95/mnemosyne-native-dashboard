@@ -35,7 +35,7 @@ interface LifecycleQueue {
 }
 
 export const LifecycleTab: React.FC<{
-  onInspectMemory: (id: string) => void;
+  onInspectMemory: (memory: any) => void;
   onInspectSession: (id: string) => void;
   onApplyFilters: (filters: any) => void;
 }> = ({ onInspectMemory, onInspectSession, onApplyFilters }) => {
@@ -158,7 +158,7 @@ export const LifecycleTab: React.FC<{
                       <span style={{ color: MG(0.4) }}>{formatDateTimeLabel(m.created_at)}</span>
                     </div>
                     <div
-                      onClick={() => onInspectMemory(m.id)}
+                      onClick={() => onInspectMemory(m)}
                       style={{ fontSize: '13px', lineHeight: '1.5', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                     >
                       {m.content}

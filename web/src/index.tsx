@@ -26,7 +26,19 @@ interface MemoryItem {
   created_at: string;
   session_id?: string;
   valid_until?: string;
-  metadata?: string;
+  metadata?: any;
+  trust_weight?: number;
+  degradation_label?: string | null;
+  degradation_tier?: number | null;
+  degradation_weight?: number | null;
+  effective_memory_weight?: number;
+  contaminated?: boolean;
+  memory_kind?: string;
+  tier?: string;
+  recall_count?: number;
+  last_recalled?: string;
+  degraded_at?: string;
+  superseded_by?: string;
 }
 
 const API = '/api/plugins/mnemosyne-native-dashboard';
@@ -44,6 +56,23 @@ const TABS = [
   { id: 'activity', label: 'History' },
   { id: 'settings', label: 'Settings' },
 ];
+
+const getVeracityColor = (veracity: string | undefined | null) => {
+  const v = String(veracity || 'unknown').toLowerCase();
+  if (v === 'stated') return '#065f46';
+  if (v === 'inferred') return '#1e3a8a';
+  if (v === 'tool') return '#581c87';
+  if (v === 'imported') return '#78350f';
+  return 'rgba(234,234,234,0.1)';
+};
+
+const getLifecycleColor = (label: string | null | undefined) => {
+  const l = String(label || '').toLowerCase();
+  if (l === 'hot') return '#991b1b';
+  if (l === 'warm') return '#854d0e';
+  if (l === 'cold') return '#1e3a8a';
+  return 'rgba(234,234,234,0.06)';
+};
 
 /**
  * Main Mnemosyne Dashboard Component
@@ -95,6 +124,21 @@ const MnemosyneDashboard: React.FC = () => {
   };
 
 
+  const handleInspectMemory = (memory: any) => {
+    if (!memory) {
+      setInspectedMemoryId(null);
+      setInspectedMemory(null);
+      return;
+    }
+    if (typeof memory === 'string') {
+      setInspectedMemoryId(memory);
+      setInspectedMemory(prev => (prev && prev.id === memory) ? prev : null);
+    } else if (memory && typeof memory === 'object') {
+      setInspectedMemoryId(memory.id);
+      setInspectedMemory(memory);
+    }
+  };
+
   useEffect(() => {
     fetchJSON(`${API}/config`).then(res => {
       if (res?.config) setAdminMode(!!res.config.memory_admin_enabled);
@@ -104,12 +148,16 @@ const MnemosyneDashboard: React.FC = () => {
 
   useEffect(() => {
     if (!inspectedMemoryId) { setInspectedMemory(null); return; }
-    if (inspectedMemoryId === 'Consolidation detail' || inspectedMemoryId === 'Triple detail') {
+    if (inspectedMemoryId === 'Consolidation detail' || inspectedMemoryId === 'Triple detail' || inspectedMemoryId === 'JSON') {
       return;
     }
     setLoadingDetail(true);
     fetchJSON(`${API}/memory?id=${encodeURIComponent(inspectedMemoryId)}`)
-      .then(res => { if (res?.item) setInspectedMemory(res.item); })
+      .then(res => {
+        if (res?.item) {
+          setInspectedMemory(prev => (prev && prev.id === res.item.id) ? { ...prev, ...res.item } : res.item);
+        }
+      })
       .catch(() => {})
       .finally(() => setLoadingDetail(false));
   }, [inspectedMemoryId]);
@@ -172,7 +220,7 @@ const MnemosyneDashboard: React.FC = () => {
               <div style={{ minHeight: 0 }}>
                 {tab === 'overview' && (
                   <OverviewTab
-                    onInspectMemory={setInspectedMemoryId}
+                    onInspectMemory={handleInspectMemory}
                     onInspectSession={setInspectedSessionId}
                     onNavigateToTab={setActiveValue}
                     onApplyFilters={(f) => handleApplyFilters(f, setActiveValue)}
@@ -180,11 +228,10 @@ const MnemosyneDashboard: React.FC = () => {
                 )}
                 {tab === 'today' && (
                   <TodayTab
-                    onInspectMemory={setInspectedMemoryId}
+                    onInspectMemory={handleInspectMemory}
                     onInspectSession={setInspectedSessionId}
                     onInspectJson={(data, title) => {
-                      setInspectedMemoryId(title || 'JSON');
-                      setInspectedMemory({
+                      handleInspectMemory({
                         id: title || 'JSON',
                         content: JSON.stringify(data, null, 2),
                         veracity: 'n/a',
@@ -197,10 +244,10 @@ const MnemosyneDashboard: React.FC = () => {
                     }}
                   />
                 )}
-                {tab === 'visualiser' && <VisualiserTab onInspectMemory={setInspectedMemoryId} />}
+                {tab === 'visualiser' && <VisualiserTab onInspectMemory={handleInspectMemory} />}
                 {tab === 'review' && (
                   <ReviewTab
-                    onInspectMemory={setInspectedMemoryId}
+                    onInspectMemory={handleInspectMemory}
                     onInspectSession={setInspectedSessionId}
                     onApplyFilters={(f) => handleApplyFilters(f, setActiveValue)}
                     adminMode={adminMode}
@@ -208,7 +255,7 @@ const MnemosyneDashboard: React.FC = () => {
                 )}
                 {tab === 'memories' && (
                   <MemoriesTab
-                    onInspectMemory={setInspectedMemoryId}
+                    onInspectMemory={handleInspectMemory}
                     onInspectSession={setInspectedSessionId}
                     adminMode={adminMode}
                     filters={memoryFilters}
@@ -218,14 +265,14 @@ const MnemosyneDashboard: React.FC = () => {
                 {tab === 'profile' && <ContextBankTab />}
                 {tab === 'lifecycle' && (
                   <LifecycleTab
-                    onInspectMemory={setInspectedMemoryId}
+                    onInspectMemory={handleInspectMemory}
                     onInspectSession={setInspectedSessionId}
                     onApplyFilters={(f) => handleApplyFilters(f, setActiveValue)}
                   />
                 )}
-                {tab === 'graph' && <GraphTab onInspectMemory={setInspectedMemoryId} onNavigateToTab={setActiveValue} />}
+                {tab === 'graph' && <GraphTab onInspectMemory={handleInspectMemory} onNavigateToTab={setActiveValue} />}
                 {tab === 'memoria' && <MemoriaTab onInspectSession={setInspectedSessionId} />}
-                {tab === 'activity' && <HistoryTab onInspectMemory={setInspectedMemoryId} />}
+                {tab === 'activity' && <HistoryTab onInspectMemory={handleInspectMemory} />}
                 {tab === 'settings' && <SettingsTab adminMode={adminMode} onToggleAdminMode={setAdminMode} />}
               </div>
             </>
@@ -256,18 +303,37 @@ const MnemosyneDashboard: React.FC = () => {
                 <div style={{ fontSize: '11px', fontFamily: 'var(--theme-font-mono)', color: 'rgba(234,234,234,0.6)', wordBreak: 'break-all' }}>{inspectedMemoryId}</div>
               </div>
               <button
-                onClick={() => setInspectedMemoryId(null)}
+                onClick={() => handleInspectMemory(null)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(234,234,234,0.5)', fontSize: '18px', lineHeight: 1, padding: '0 0 0 12px' }}
               >✕</button>
             </div>
 
             {/* Content */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
-              {loadingDetail ? (
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px', scrollBehavior: 'smooth' }}>
+              {loadingDetail && !inspectedMemory ? (
                 <div style={{ textAlign: 'center', color: 'rgba(234,234,234,0.4)', padding: '40px' }}>Loading memory record...</div>
               ) : inspectedMemory ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {/* Content */}
+                  {/* Trust strip */}
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <Badge style={{ background: getVeracityColor(inspectedMemory.veracity) }}>
+                      {inspectedMemory.veracity} trust (×{safeNumber(inspectedMemory.trust_weight, 2, '1.00')})
+                    </Badge>
+                    <Badge style={{ background: getLifecycleColor(inspectedMemory.degradation_label) }}>
+                      {inspectedMemory.degradation_label ? `${inspectedMemory.degradation_label} tier ${inspectedMemory.degradation_tier}` : 'not degraded'}
+                      {inspectedMemory.degradation_weight !== undefined && inspectedMemory.degradation_weight !== null ? ` (×${safeNumber(inspectedMemory.degradation_weight, 2)})` : ''}
+                    </Badge>
+                    <Badge style={{ background: 'rgba(234,234,234,0.06)', border: '1px solid rgba(234,234,234,0.15)' }}>
+                      effective weight: ×{safeNumber(inspectedMemory.effective_memory_weight, 2, '0.00')}
+                    </Badge>
+                    {inspectedMemory.contaminated && (
+                      <Badge style={{ background: '#991b1b', color: '#fca5a5' }}>
+                        needs review
+                      </Badge>
+                    )}
+                  </div>
+
+                  {/* Content block */}
                   <div>
                     <div style={{ fontSize: '11px', color: 'rgba(234,234,234,0.45)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Content</div>
                     <div style={{
@@ -277,53 +343,69 @@ const MnemosyneDashboard: React.FC = () => {
                     }}>{inspectedMemory.content}</div>
                   </div>
 
-                  {/* Metadata grid */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-                    {[
-                      { label: 'Veracity', value: inspectedMemory.veracity },
-                      { label: 'Importance', value: safeNumber(inspectedMemory.importance, 2, 'n/a') },
-                      { label: 'Source', value: inspectedMemory.source || 'unknown' },
-                      { label: 'Scope', value: inspectedMemory.scope || 'session' },
-                    ].map(f => (
-                      <div key={f.label} style={{ padding: '10px 12px', background: 'rgba(234,234,234,0.04)', border: '1px solid rgba(234,234,234,0.08)', borderRadius: '4px' }}>
-                        <div style={{ fontSize: '10px', color: 'rgba(234,234,234,0.35)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>{f.label}</div>
-                        <div style={{ fontSize: '12px', fontWeight: 600 }}>{f.value}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Timeline fields */}
-                  <div style={{ fontSize: '12px', fontFamily: 'var(--theme-font-mono)', color: 'rgba(234,234,234,0.5)' }}>
-                    {[
-                      ['Created', formatDateTimeLabel(inspectedMemory.created_at, '')],
-                      ['Session', inspectedMemory.session_id],
-                      ['Valid Until', formatDateTimeLabel(inspectedMemory.valid_until, '')],
-                      ['Status', inspectedMemory.status],
-                    ].filter(([, v]) => v).map(([label, value]) => (
-                      <div key={label as string} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid rgba(234,234,234,0.06)' }}>
-                        <span>{label}</span>
-                        {label === 'Session' ? (
-                          <span
-                            onClick={() => { setInspectedMemoryId(null); setInspectedSessionId(value as string); }}
-                            style={{ color: 'rgba(234,234,234,0.75)', textDecoration: 'underline', cursor: 'pointer' }}
-                          >
-                            {value as string}
-                          </span>
-                        ) : (
-                          <span style={{ color: 'rgba(234,234,234,0.75)' }}>{value as string}</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  {inspectedMemory.metadata && (
-                    <div>
-                      <div style={{ fontSize: '11px', color: 'rgba(234,234,234,0.45)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Metadata</div>
-                      <pre style={{ padding: '12px', borderRadius: '4px', background: 'rgba(234,234,234,0.04)', fontSize: '11px', overflowX: 'auto', maxHeight: '160px', fontFamily: 'var(--theme-font-mono)', color: 'rgba(234,234,234,0.6)' }}>
-                        {JSON.stringify(inspectedMemory.metadata, null, 2)}
-                      </pre>
+                  {/* Comprehensive Diagnostics Table */}
+                  <div>
+                    <div style={{ fontSize: '11px', color: 'rgba(234,234,234,0.45)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Diagnostics</div>
+                    <div style={{ fontSize: '12px', fontFamily: 'var(--theme-font-mono)', color: 'rgba(234,234,234,0.5)', display: 'flex', flexDirection: 'column' }}>
+                      {[
+                        ['Memory ID', inspectedMemory.id],
+                        ['Kind / Tier', inspectedMemory.memory_kind || inspectedMemory.tier || 'memory'],
+                        ['Source', inspectedMemory.source || 'unknown'],
+                        ['Scope', inspectedMemory.scope || 'session'],
+                        ['Session ID', inspectedMemory.session_id],
+                        ['Status', inspectedMemory.status],
+                        ['Recall Count', inspectedMemory.recall_count !== undefined && inspectedMemory.recall_count !== null ? `${inspectedMemory.recall_count}×` : '0×'],
+                        ['Last Recalled', formatDateTimeLabel(inspectedMemory.last_recalled, 'never')],
+                        ['Created At', formatDateTimeLabel(inspectedMemory.created_at, 'unknown')],
+                        ['Degraded At', formatDateTimeLabel(inspectedMemory.degraded_at, 'never')],
+                        ['Valid Until', formatDateTimeLabel(inspectedMemory.valid_until, 'none')],
+                        ['Superseded By', inspectedMemory.superseded_by || 'none'],
+                      ].map(([label, value]) => {
+                        if (!value && label !== 'Valid Until' && label !== 'Superseded By' && label !== 'Last Recalled' && label !== 'Degraded At') return null;
+                        return (
+                          <div key={label as string} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid rgba(234,234,234,0.06)' }}>
+                            <span>{label}</span>
+                            {label === 'Session ID' && value && value !== 'default' ? (
+                              <span
+                                onClick={() => { handleInspectMemory(null); setInspectedSessionId(value as string); }}
+                                style={{ color: 'rgba(234,234,234,0.75)', textDecoration: 'underline', cursor: 'pointer' }}
+                              >
+                                {value as string}
+                              </span>
+                            ) : (
+                              <span style={{ color: 'rgba(234,234,234,0.75)' }}>{String(value)}</span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  )}
+                  </div>
+
+                  {/* Metadata block */}
+                  {(() => {
+                    if (!inspectedMemory.metadata) return null;
+                    let parsed = inspectedMemory.metadata;
+                    if (typeof parsed === 'string') {
+                      try {
+                        parsed = JSON.parse(parsed);
+                      } catch {
+                        parsed = { value: parsed };
+                      }
+                    }
+                    if (typeof parsed === 'object' && Object.keys(parsed).length === 0) return null;
+                    return (
+                      <div>
+                        <div style={{ fontSize: '11px', color: 'rgba(234,234,234,0.45)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Metadata</div>
+                        <pre style={{
+                          padding: '12px', borderRadius: '4px', background: 'rgba(234,234,234,0.04)',
+                          fontSize: '11px', overflowX: 'auto', maxHeight: '160px',
+                          fontFamily: 'var(--theme-font-mono)', color: 'rgba(234,234,234,0.6)', margin: 0
+                        }}>
+                          {JSON.stringify(parsed, null, 2)}
+                        </pre>
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : (
                 <div style={{ textAlign: 'center', color: '#f87171', padding: '40px', fontSize: '13px' }}>Memory record could not be found.</div>
@@ -332,7 +414,7 @@ const MnemosyneDashboard: React.FC = () => {
 
             {/* Footer */}
             <div style={{ padding: '12px 20px', borderTop: '1px solid rgba(234,234,234,0.1)', display: 'flex', justifyContent: 'flex-end' }}>
-              <Button onClick={() => setInspectedMemoryId(null)}>Close</Button>
+              <Button onClick={() => handleInspectMemory(null)}>Close</Button>
             </div>
           </div>
         </div>
