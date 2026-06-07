@@ -7,6 +7,10 @@ requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Vaibhav Seth" }]
 keywords = ["hermes-agent", "mnemosyne", "memory", "dashboard", "sqlite"]
+dependencies = [
+  "fastapi>=0.115,<1",
+  "pydantic>=2,<3",
+]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Web Environment",
@@ -22,6 +26,13 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/vabs95/mnemosyne-native-dashboard"
 Issues = "https://github.com/vabs95/mnemosyne-native-dashboard/issues"
+
+[project.optional-dependencies]
+test = [
+  "httpx>=0.27,<1",
+  "pytest>=8,<10",
+  "ruff>=0.8",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
