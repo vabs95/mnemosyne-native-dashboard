@@ -47,7 +47,7 @@ export const i18n = {
     scratchpad: 'Scratchpad',
     scratchpadDesc: 'Reasoning workspace',
     needsReview: 'Needs Review',
-    needsReviewDesc: 'Unverified/contaminated logs',
+    needsReviewDesc: 'Contaminated logs',
     degraded: 'Degraded',
     degradedDesc: 'Decayed episodic summaries',
     triples: 'Triples',

@@ -112,10 +112,10 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
       {/* 7 Stat Cards Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(148px, 1fr))', gap: '10px' }}>
-        <StatCard title={t('overview.workingMemory')} count={counts.working_memory} desc={t('overview.workingDesc')} icon="🧠" onClick={() => onApplyFilters({ kind: 'working' })} />
-        <StatCard title={t('overview.episodicMemory')} count={counts.episodic_memory} desc={t('overview.episodicDesc')} icon="📖" onClick={() => onApplyFilters({ kind: 'episodic' })} />
-        <StatCard title={t('overview.scratchpad')} count={counts.scratchpad ?? 0} desc={t('overview.scratchpadDesc')} icon="📝" />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
+        <StatCard title={t('overview.workingMemory')} count={counts.working_memory} desc={t('overview.workingDesc')} icon="◉" onClick={() => onApplyFilters({ kind: 'working' })} />
+        <StatCard title={t('overview.episodicMemory')} count={counts.episodic_memory} desc={t('overview.episodicDesc')} icon="▤" onClick={() => onApplyFilters({ kind: 'episodic' })} />
+        <StatCard title={t('overview.scratchpad')} count={counts.scratchpad ?? 0} desc={t('overview.scratchpadDesc')} icon="✎" />
         <StatCard title={t('overview.needsReview')} count={contaminationTotal} desc={t('overview.needsReviewDesc')} icon="⚑" onClick={() => onNavigateToTab('review')} />
         <StatCard title={t('overview.degraded')} count={degradationTotal} desc={t('overview.degradedDesc')} icon="◴" onClick={() => onNavigateToTab('lifecycle')} />
         <StatCard title={t('overview.triples')} count={counts.triples} desc={t('overview.triplesDesc')} icon="◎" onClick={() => onNavigateToTab('graph')} />
@@ -123,7 +123,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
       </div>
 
       {/* 5 Breakdowns Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
         {/* Trust mix */}
         <Card>
           <CardHeader><CardTitle style={{ fontSize: '12px' }}>{t('overview.trustMix')}</CardTitle></CardHeader>
