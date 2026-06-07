@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, Button, Input, Select, SelectOption } from '@hermes/sdk';
 import { formatDateTimeLabel, safeNumber, shortId } from '../utils/format';
+import { t } from '../utils/i18n';
 
 const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
@@ -51,10 +52,8 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
 
-  // Expiry date input state
   const [expiryDate, setExpiryDate] = useState('');
 
-  // Fetch queues stats/cards initially
   useEffect(() => {
     loadReviewQueues(false);
   }, [selectedQueue]);
@@ -104,7 +103,6 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
     setSearchQuery('');
     setMinImportance('0');
     setOffset(0);
-    // Reload with cleared filters
     setLoading(true);
     const params = new URLSearchParams({ queue: selectedQueue, limit: '100', offset: '0' });
     fetchJSON(`${API}/review?${params.toString()}`)
@@ -123,34 +121,27 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
   const handleLoadMore = () => {
     if (nextOffset !== null) {
       setOffset(nextOffset);
-      // Wait for state updates then load
       setTimeout(() => loadReviewQueues(true), 0);
     }
   };
 
-  // Checkbox handlers
   const handleSelectToggle = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
 
   const handleSelectAllToggle = () => {
     if (items.every(x => selectedIds.has(x.id))) {
-      // Unselect all listed
       setSelectedIds(prev => {
         const next = new Set(prev);
         items.forEach(x => next.delete(x.id));
         return next;
       });
     } else {
-      // Select all listed
       setSelectedIds(prev => {
         const next = new Set(prev);
         items.forEach(x => next.add(x.id));
@@ -159,16 +150,12 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
     }
   };
 
-  // Bulk actions API calls
   async function runBulkAction(url: string, getBody: (id: string) => object) {
     setSubmitting(true);
     try {
       const ids = Array.from(selectedIds);
       for (const id of ids) {
-        await fetchJSON(url, {
-          method: 'POST',
-          body: JSON.stringify(getBody(id)),
-        });
+        await fetchJSON(url, { method: 'POST', body: JSON.stringify(getBody(id)) });
       }
       setSelectedIds(new Set());
       loadReviewQueues(false);
@@ -209,8 +196,8 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Header */}
       <div>
-        <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px' }}>Trust Review</div>
-        <div style={{ fontSize: '12px', color: MG(0.45) }}>Triage selected memories — confirm, correct, or expire only what you choose</div>
+        <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px' }}>{t('review.title')}</div>
+        <div style={{ fontSize: '12px', color: MG(0.45) }}>{t('review.subtitle')}</div>
       </div>
 
       {/* Stats Cards Row */}
@@ -245,7 +232,7 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
         <CardContent>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '160px' }}>
-              <span style={{ fontSize: '10px', color: MG(0.4), textTransform: 'uppercase' }}>Review Queue</span>
+              <span style={{ fontSize: '10px', color: MG(0.4), textTransform: 'uppercase' }}>{t('review.title')}</span>
               <Select value={selectedQueue} onValueChange={(val: any) => { setSelectedQueue(val); setOffset(0); }}>
                 {cards.map(c => (
                   <SelectOption key={c.key} value={c.key}>{c.title} ({c.count})</SelectOption>
@@ -254,9 +241,9 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '200px' }}>
-              <span style={{ fontSize: '10px', color: MG(0.4), textTransform: 'uppercase' }}>Search Query</span>
+              <span style={{ fontSize: '10px', color: MG(0.4), textTransform: 'uppercase' }}>Search</span>
               <Input
-                placeholder="Search this queue..."
+                placeholder={t('review.searchPlaceholder')}
                 value={searchQuery}
                 onChange={(e: any) => setSearchQuery(e.target.value)}
                 onKeyDown={(e: any) => e.key === 'Enter' && handleApplyFilters()}
@@ -265,7 +252,7 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '150px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: MG(0.4), textTransform: 'uppercase' }}>
-                <span>Min Importance</span>
+                <span>{t('review.minImportance')}</span>
                 <span style={{ fontFamily: 'var(--theme-font-mono)' }}>
                   {Number(minImportance) > 0 ? `≥ ${Number(minImportance).toFixed(2)}` : 'any'}
                 </span>
@@ -282,8 +269,8 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
             </div>
 
             <div style={{ display: 'flex', gap: '6px', alignSelf: 'flex-end', height: '36px' }}>
-              <Button onClick={handleApplyFilters} primary>Apply Filters</Button>
-              <Button onClick={handleClearFilters} ghost>Clear</Button>
+              <Button onClick={handleApplyFilters} primary>{t('review.applyFilters')}</Button>
+              <Button onClick={handleClearFilters} ghost>{t('review.clear')}</Button>
             </div>
           </div>
         </CardContent>
@@ -300,17 +287,17 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
                   checked={items.length > 0 && items.every(x => selectedIds.has(x.id))}
                   onChange={handleSelectAllToggle}
                 />
-                <span>Select Listed</span>
+                <span>{t('review.selectListed')}</span>
               </label>
-              <Badge>{selectedIds.size} selected</Badge>
+              <Badge>{selectedIds.size} {t('review.selectedCount')}</Badge>
             </div>
 
             <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <Button onClick={handleConfirmSelected} disabled={!selectedIds.size || submitting} primary>Confirm Selected</Button>
-              
+              <Button onClick={handleConfirmSelected} disabled={!selectedIds.size || submitting} primary>{t('review.confirmSelected')}</Button>
+
               <div style={{ width: '120px' }}>
                 <Select value="" onValueChange={handleSetTrust} disabled={!selectedIds.size || submitting}>
-                  <SelectOption value="">Set Trust</SelectOption>
+                  <SelectOption value="">{t('review.setTrust')}</SelectOption>
                   <SelectOption value="stated">stated</SelectOption>
                   <SelectOption value="inferred">inferred</SelectOption>
                   <SelectOption value="tool">tool</SelectOption>
@@ -327,11 +314,11 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
                   style={{ width: '150px', height: '36px' }}
                   disabled={!selectedIds.size || submitting}
                 />
-                <Button onClick={handleSetExpiry} disabled={!selectedIds.size || submitting} ghost>Set Expiry</Button>
+                <Button onClick={handleSetExpiry} disabled={!selectedIds.size || submitting} ghost>{t('memories.setExpiry')}</Button>
               </div>
 
-              <Button onClick={handleExpireSelected} disabled={!selectedIds.size || submitting} style={{ background: '#ef4444', color: '#fff' }}>Expire</Button>
-              <Button onClick={() => setSelectedIds(new Set())} disabled={!selectedIds.size} ghost>Clear Selection</Button>
+              <Button onClick={handleExpireSelected} disabled={!selectedIds.size || submitting} style={{ background: '#ef4444', color: '#fff' }}>{t('review.expire')}</Button>
+              <Button onClick={() => setSelectedIds(new Set())} disabled={!selectedIds.size} ghost>{t('review.clearSelection')}</Button>
             </div>
           </CardContent>
         </Card>
@@ -345,7 +332,7 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
             <div style={{ fontSize: '12px', color: MG(0.4) }}>{currentQueueInfo?.description || ''}</div>
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <span style={{ fontSize: '12px', color: MG(0.5) }}>{totalCount} total · {items.length} listed</span>
+            <span style={{ fontSize: '12px', color: MG(0.5) }}>{totalCount} {t('review.totalCount')} · {items.length} {t('review.listedCount')}</span>
             <Button
               onClick={() => {
                 if (currentQueueInfo) {
@@ -360,13 +347,13 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
               }}
               ghost
             >
-              Open filtered browser
+              {t('review.openBrowser')}
             </Button>
           </div>
         </div>
 
         {loading && items.length === 0 ? (
-          <div style={{ padding: '60px', textAlign: 'center', color: MG(0.4) }}>Loading triage queue...</div>
+          <div style={{ padding: '60px', textAlign: 'center', color: MG(0.4) }}>{t('review.loadingTriage')}</div>
         ) : items.length > 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {items.map(m => (
@@ -429,13 +416,13 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
 
             {hasMore && (
               <div style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
-                <Button onClick={handleLoadMore} primary>Load More</Button>
+                <Button onClick={handleLoadMore} primary>{t('review.loadMore')}</Button>
               </div>
             )}
           </div>
         ) : (
           <div style={{ padding: '40px', border: `1px dashed ${MG(0.15)}`, borderRadius: '4px', textAlign: 'center', color: MG(0.4), fontSize: '13px' }}>
-            No items in this queue. This queue is clear for now.
+            {t('review.noItems')}
           </div>
         )}
       </div>

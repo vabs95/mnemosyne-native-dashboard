@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Button } from '@hermes/sdk';
 import { safeNumber } from '../utils/format';
+import { t } from '../utils/i18n';
 
 const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
@@ -182,14 +183,14 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>
       <Card>
         <CardHeader>
-          <CardTitle>Memory Constellation 3D</CardTitle>
+          <CardTitle>{t('visualiser.title')}</CardTitle>
         </CardHeader>
         <CardContent>
           <div style={{ fontSize: '12px', color: MG(0.45), marginBottom: '12px' }}>
-            Interactive 3D model of episodic records and semantic connections.
+            {t('visualiser.subtitle')}
           </div>
           <div style={{ fontSize: '11px', color: MG(0.4), marginBottom: '10px' }}>
-            {counts.nodes} nodes · {counts.edges} edges
+            {counts.nodes} {t('visualiser.nodes')} · {counts.edges} {t('visualiser.edges')}
           </div>
           <div
             style={{
@@ -203,10 +204,10 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
             }}
           >
             <span style={{ textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              {selectedNode ? 'Selected' : hoveredNode ? 'Hovering' : 'Ready'}
+              {selectedNode ? t('visualiser.selected') : hoveredNode ? t('visualiser.hovering') : t('visualiser.ready')}
             </span>
             <span style={{ color: MG(0.7), fontFamily: 'var(--theme-font-mono)' }}>
-              {selectedNode?.label || hoveredNode?.label || 'Move over a node to show its label'}
+              {selectedNode?.label || hoveredNode?.label || t('visualiser.prompt')}
             </span>
           </div>
           {loading ? (
@@ -221,7 +222,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
                 color: MG(0.4),
               }}
             >
-              Loading 3D Engine...
+              {t('visualiser.loadingEngine')}
             </div>
           ) : sceneError ? (
             <div
@@ -265,7 +266,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
                 color: MG(0.4),
               }}
             >
-              No constellation nodes available.
+              {t('visualiser.noNodes')}
             </div>
           )}
         </CardContent>
@@ -273,17 +274,17 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
 
       <Card>
         <CardHeader>
-          <CardTitle>Constellation Inspector</CardTitle>
+          <CardTitle>{t('visualiser.inspectorTitle')}</CardTitle>
         </CardHeader>
         <CardContent>
           <div style={{ fontSize: '12px', color: MG(0.45), marginBottom: '16px' }}>
-            Select a star inside the 3D model to view detailed semantic links.
+            {t('visualiser.inspectorDesc')}
           </div>
           {selectedNode ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '12px', borderTop: `1px solid ${MG(0.1)}` }}>
               <div>
                 <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', color: MG(0.4), marginBottom: '6px' }}>
-                  Entity Hub
+                  {t('visualiser.entityHub')}
                 </div>
                 <div style={{ fontSize: '15px', fontWeight: 700 }}>{selectedNode.label}</div>
                 <div style={{ fontSize: '11px', color: MG(0.45), marginTop: '4px' }}>
@@ -295,7 +296,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
               </div>
               {selectedNode.memory_id && (
                 <Button onClick={() => onInspectMemory(selectedNode.memory_id)}>
-                  Open Associated Memory
+                  {t('visualiser.openMemory')}
                 </Button>
               )}
             </div>
@@ -311,7 +312,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
                 fontFamily: 'var(--theme-font-mono)',
               }}
             >
-              Click on any node in the constellation to inspect it.
+              {t('visualiser.clickNodePrompt')}
             </div>
           )}
         </CardContent>

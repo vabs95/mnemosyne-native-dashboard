@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, Button } from '@hermes/sdk';
+import { fetchJSON, Card, CardContent, Button, Badge } from '@hermes/sdk';
 import { formatDateTimeLabel, safeNumber, shortId } from '../utils/format';
+import { t } from '../utils/i18n';
 
 const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
@@ -55,7 +56,7 @@ export const LifecycleTab: React.FC<{
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div style={{ padding: '32px', color: MG(0.4), textAlign: 'center' }}>Loading lifecycle diagnostics...</div>;
+  if (loading) return <div style={{ padding: '32px', color: MG(0.4), textAlign: 'center' }}>{t('lifecycle.loadingLifecycle')}</div>;
 
   const weights = thresholds?.weights || {};
 
@@ -63,18 +64,18 @@ export const LifecycleTab: React.FC<{
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Header */}
       <div>
-        <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px' }}>Lifecycle</div>
-        <div style={{ fontSize: '12px', color: MG(0.45) }}>Hot / warm / cold memory degradation dashboard</div>
+        <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px' }}>{t('lifecycle.title')}</div>
+        <div style={{ fontSize: '12px', color: MG(0.45) }}>{t('lifecycle.subtitle')}</div>
       </div>
 
       {/* Threshold Config Banner */}
       <Card style={{ background: MG(0.02) }}>
         <CardContent style={{ padding: '12px 16px' }}>
           <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontSize: '12px', color: MG(0.7) }}>
-            <span>Tier 2 after <strong>{thresholds?.tier2_days ?? 30} days</strong></span>
-            <span>Tier 3 after <strong>{thresholds?.tier3_days ?? 180} days</strong></span>
-            <span>Weights: hot ×{safeNumber(weights['1'] ?? 1.0, 2)} · warm ×{safeNumber(weights['2'] ?? 0.5, 2)} · cold ×{safeNumber(weights['3'] ?? 0.25, 2)}</span>
-            <span style={{ color: '#fbbf24' }}>Read-only: no degradation is triggered from this page</span>
+            <span>{t('lifecycle.tier2After')} <strong>{thresholds?.tier2_days ?? 30} {t('lifecycle.days')}</strong></span>
+            <span>{t('lifecycle.tier3After')} <strong>{thresholds?.tier3_days ?? 180} {t('lifecycle.days')}</strong></span>
+            <span>{t('lifecycle.weights')}: hot ×{safeNumber(weights['1'] ?? 1.0, 2)} · warm ×{safeNumber(weights['2'] ?? 0.5, 2)} · cold ×{safeNumber(weights['3'] ?? 0.25, 2)}</span>
+            <span style={{ color: '#fbbf24' }}>{t('lifecycle.readOnlyNotice')}</span>
           </div>
         </CardContent>
       </Card>
@@ -123,8 +124,8 @@ export const LifecycleTab: React.FC<{
                 <div style={{ fontSize: '12px', color: MG(0.4) }}>{q.description || ''}</div>
               </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <span style={{ fontSize: '11px', color: MG(0.5) }}>{q.items?.length || 0} listed</span>
-                <Button onClick={() => onApplyFilters(q.filter || {})} ghost>Open lifecycle filter</Button>
+                <span style={{ fontSize: '11px', color: MG(0.5) }}>{q.items?.length || 0} {t('lifecycle.listed')}</span>
+                <Button onClick={() => onApplyFilters(q.filter || {})} ghost>{t('lifecycle.openFilter')}</Button>
               </div>
             </div>
 
@@ -168,7 +169,7 @@ export const LifecycleTab: React.FC<{
               </div>
             ) : (
               <div style={{ padding: '16px', textAlign: 'center', color: MG(0.35), fontSize: '12px' }}>
-                No items in this queue. This queue is clear for now.
+                {t('lifecycle.noItems')}
               </div>
             )}
           </div>

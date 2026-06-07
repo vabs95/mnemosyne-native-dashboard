@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, Button, Input } from '@hermes/sdk';
 import { safeNumber, shortId } from '../utils/format';
+import { t } from '../utils/i18n';
 
 const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
@@ -29,7 +30,6 @@ export const MemoriaTab: React.FC<{
   const [stats, setStats] = useState<MemoriaStats | null>(null);
   const [loadingStats, setLoadingStats] = useState(true);
 
-  // Search query states
   const [queries, setQueries] = useState({
     facts: '',
     timelines: '',
@@ -38,7 +38,6 @@ export const MemoriaTab: React.FC<{
     preferences: '',
   });
 
-  // Table lists states
   const [listData, setListData] = useState<Record<string, any[]>>({
     facts: [],
     timelines: [],
@@ -93,7 +92,6 @@ export const MemoriaTab: React.FC<{
     setQueries(prev => ({ ...prev, [panel]: value }));
   };
 
-  // Render helpers
   const renderFact = (item: any) => {
     const key = item.key || '';
     const value = item.value || '';
@@ -149,7 +147,7 @@ export const MemoriaTab: React.FC<{
       <div key={item.id || instr} style={{ padding: '10px 12px', background: MG(0.03), border: `1px solid ${MG(0.07)}`, borderRadius: '4px' }}>
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>
           {topic && <Badge>{topic}</Badge>}
-          <Badge style={{ background: isActive ? '#065f46' : '#991b1b' }}>{isActive ? 'active' : 'inactive'}</Badge>
+          <Badge style={{ background: isActive ? '#065f46' : '#991b1b' }}>{isActive ? t('common.active') : t('common.inactive')}</Badge>
           {item.session_id && item.session_id !== 'default' && (
             <span
               onClick={() => onInspectSession(item.session_id)}
@@ -182,17 +180,52 @@ export const MemoriaTab: React.FC<{
     );
   };
 
+  const panels = ['overview', 'facts', 'timelines', 'instructions', 'kg', 'preferences'] as const;
+
+  const panelTitleKey: Record<string, string> = {
+    overview: 'Overview',
+    facts: t('memoria.facts'),
+    timelines: t('memoria.timelines'),
+    instructions: t('memoria.instructions'),
+    kg: t('memoria.kg'),
+    preferences: t('memoria.preferences'),
+  };
+
+  const panelSearchPlaceholders: Record<string, string> = {
+    facts: t('memoria.searchFacts'),
+    timelines: t('memoria.searchTimelines'),
+    instructions: t('memoria.searchInstructions'),
+    kg: t('memoria.searchKg'),
+    preferences: t('memoria.searchPreferences'),
+  };
+
+  const panelSearchingLabels: Record<string, string> = {
+    facts: `${t('memoria.searching')} facts...`,
+    timelines: `${t('memoria.searching')} timelines...`,
+    instructions: `${t('memoria.searching')} instructions...`,
+    kg: `${t('memoria.searching')} KG...`,
+    preferences: `${t('memoria.searching')} preferences...`,
+  };
+
+  const panelHeaderKeys: Record<string, string> = {
+    facts: t('memoria.factsTitle'),
+    timelines: t('memoria.timelinesTitle'),
+    instructions: t('memoria.instructionsTitle'),
+    kg: t('memoria.kgTitle'),
+    preferences: t('memoria.preferencesTitle'),
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Header */}
       <div>
-        <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px' }}>MEMORIA</div>
-        <div style={{ fontSize: '12px', color: MG(0.45) }}>Structured fact extraction and retrieval (Memoria 3.x schema)</div>
+        <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px' }}>{t('memoria.title')}</div>
+        <div style={{ fontSize: '12px', color: MG(0.45) }}>{t('memoria.subtitle')}</div>
       </div>
 
       {/* Subpanels tabs navigation */}
       <div style={{ display: 'flex', gap: '4px', borderBottom: `1px solid ${MG(0.1)}`, paddingBottom: '8px' }}>
-        {(['overview', 'facts', 'timelines', 'instructions', 'kg', 'preferences'] as const).map(panel => (
+        {panels.map(panel => (
           <Button
             key={panel}
             onClick={() => setActivePanel(panel)}
@@ -200,14 +233,14 @@ export const MemoriaTab: React.FC<{
             primary={activePanel === panel}
             style={{ fontSize: '12px', textTransform: 'capitalize', padding: '6px 12px', height: '30px' }}
           >
-            {panel === 'kg' ? 'KG' : panel}
+            {panelTitleKey[panel] || panel}
           </Button>
         ))}
       </div>
 
-      {/* Overview stats cards (Only loaded from stats fetch) */}
+      {/* Overview stats cards */}
       {loadingStats ? (
-        <div style={{ padding: '20px', color: MG(0.4), textAlign: 'center' }}>Loading Memoria metrics...</div>
+        <div style={{ padding: '20px', color: MG(0.4), textAlign: 'center' }}>{t('memoria.loadingMetrics')}</div>
       ) : (
         activePanel === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -229,7 +262,7 @@ export const MemoriaTab: React.FC<{
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               {/* Table counts list */}
               <Card>
-                <CardHeader><CardTitle>Table Counts</CardTitle></CardHeader>
+                <CardHeader><CardTitle>{t('memoria.tableCounts')}</CardTitle></CardHeader>
                 <CardContent>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {Object.entries(stats?.tables || {}).map(([tbl, info]) => {
@@ -247,7 +280,7 @@ export const MemoriaTab: React.FC<{
 
               {/* Top sessions */}
               <Card>
-                <CardHeader><CardTitle>Top Sessions</CardTitle></CardHeader>
+                <CardHeader><CardTitle>{t('memoria.topSessions')}</CardTitle></CardHeader>
                 <CardContent>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {stats?.top_sessions && stats.top_sessions.length > 0 ? (
@@ -262,7 +295,7 @@ export const MemoriaTab: React.FC<{
                         </div>
                       ))
                     ) : (
-                      <div style={{ color: MG(0.35), fontSize: '12px' }}>No session data</div>
+                      <div style={{ color: MG(0.35), fontSize: '12px' }}>{t('memoria.noSessionData')}</div>
                     )}
                   </div>
                 </CardContent>
@@ -272,169 +305,63 @@ export const MemoriaTab: React.FC<{
         )
       )}
 
-      {/* Facts Panel */}
-      {activePanel === 'facts' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '14px', fontWeight: 600 }}>MEMORIA Facts</span>
-            <span style={{ fontSize: '11px', color: MG(0.4) }}>{listData.facts.length} entries</span>
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <Input
-              placeholder="Search facts..."
-              value={queries.facts}
-              onChange={(e: any) => handleQueryChange('facts', e.target.value)}
-              onKeyDown={(e: any) => e.key === 'Enter' && handleSearch('facts')}
-              style={{ flex: 1 }}
-            />
-            <Button onClick={() => handleSearch('facts')} primary>Search</Button>
-          </div>
-          {loadingList ? (
-            <div style={{ textAlign: 'center', color: MG(0.4), padding: '40px' }}>Searching facts...</div>
-          ) : listData.facts.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {listData.facts.map(renderFact)}
+      {/* Dynamic panels (facts / timelines / instructions / kg / preferences) */}
+      {(['facts', 'timelines', 'instructions', 'kg', 'preferences'] as const).map(panel => (
+        activePanel === panel && (
+          <div key={panel} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '14px', fontWeight: 600 }}>{panelHeaderKeys[panel]}</span>
+              <span style={{ fontSize: '11px', color: MG(0.4) }}>{listData[panel].length} {t('memoria.entries')}</span>
             </div>
-          ) : (
-            <div style={{ textAlign: 'center', padding: '40px', color: MG(0.35) }}>No entries found.</div>
-          )}
-        </div>
-      )}
-
-      {/* Timelines Panel */}
-      {activePanel === 'timelines' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '14px', fontWeight: 600 }}>MEMORIA Timelines</span>
-            <span style={{ fontSize: '11px', color: MG(0.4) }}>{listData.timelines.length} entries</span>
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <Input
-              placeholder="Search timelines..."
-              value={queries.timelines}
-              onChange={(e: any) => handleQueryChange('timelines', e.target.value)}
-              onKeyDown={(e: any) => e.key === 'Enter' && handleSearch('timelines')}
-              style={{ flex: 1 }}
-            />
-            <Button onClick={() => handleSearch('timelines')} primary>Search</Button>
-          </div>
-          {loadingList ? (
-            <div style={{ textAlign: 'center', color: MG(0.4), padding: '40px' }}>Searching timelines...</div>
-          ) : listData.timelines.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {listData.timelines.map(renderTimeline)}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <Input
+                placeholder={panelSearchPlaceholders[panel]}
+                value={queries[panel]}
+                onChange={(e: any) => handleQueryChange(panel, e.target.value)}
+                onKeyDown={(e: any) => e.key === 'Enter' && handleSearch(panel)}
+                style={{ flex: 1 }}
+              />
+              <Button onClick={() => handleSearch(panel)} primary>{t('memoria.search')}</Button>
             </div>
-          ) : (
-            <div style={{ textAlign: 'center', padding: '40px', color: MG(0.35) }}>No entries found.</div>
-          )}
-        </div>
-      )}
-
-      {/* Instructions Panel */}
-      {activePanel === 'instructions' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '14px', fontWeight: 600 }}>MEMORIA Instructions</span>
-            <span style={{ fontSize: '11px', color: MG(0.4) }}>{listData.instructions.length} entries</span>
+            {loadingList ? (
+              <div style={{ textAlign: 'center', color: MG(0.4), padding: '40px' }}>{panelSearchingLabels[panel]}</div>
+            ) : listData[panel].length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {panel === 'facts' && listData.facts.map(renderFact)}
+                {panel === 'timelines' && listData.timelines.map(renderTimeline)}
+                {panel === 'instructions' && listData.instructions.map(renderInstruction)}
+                {panel === 'preferences' && listData.preferences.map(renderPreference)}
+                {panel === 'kg' && (
+                  <Card style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                      <thead>
+                        <tr style={{ borderBottom: `1px solid ${MG(0.15)}`, textAlign: 'left' }}>
+                          <th style={{ padding: '8px 12px' }}>{t('memoria.subject')}</th>
+                          <th style={{ padding: '8px 12px' }}>{t('memoria.predicate')}</th>
+                          <th style={{ padding: '8px 12px' }}>{t('memoria.object')}</th>
+                          <th style={{ padding: '8px 12px' }}>{t('memoria.confidence')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {listData.kg.map((item, idx) => (
+                          <tr key={idx} style={{ borderBottom: `1px solid ${MG(0.06)}` }}>
+                            <td style={{ padding: '8px 12px' }}>{item.subject}</td>
+                            <td style={{ padding: '8px 12px' }}>{item.predicate}</td>
+                            <td style={{ padding: '8px 12px' }}>{item.object}</td>
+                            <td style={{ padding: '8px 12px' }}>{item.confidence !== null && item.confidence !== undefined ? Number(item.confidence).toFixed(2) : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </Card>
+                )}
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '40px', color: MG(0.35) }}>{t('memoria.noData')}</div>
+            )}
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <Input
-              placeholder="Search instructions..."
-              value={queries.instructions}
-              onChange={(e: any) => handleQueryChange('instructions', e.target.value)}
-              onKeyDown={(e: any) => e.key === 'Enter' && handleSearch('instructions')}
-              style={{ flex: 1 }}
-            />
-            <Button onClick={() => handleSearch('instructions')} primary>Search</Button>
-          </div>
-          {loadingList ? (
-            <div style={{ textAlign: 'center', color: MG(0.4), padding: '40px' }}>Searching instructions...</div>
-          ) : listData.instructions.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {listData.instructions.map(renderInstruction)}
-            </div>
-          ) : (
-            <div style={{ textAlign: 'center', padding: '40px', color: MG(0.35) }}>No entries found.</div>
-          )}
-        </div>
-      )}
-
-      {/* KG Panel */}
-      {activePanel === 'kg' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '14px', fontWeight: 600 }}>MEMORIA KG</span>
-            <span style={{ fontSize: '11px', color: MG(0.4) }}>{listData.kg.length} entries</span>
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <Input
-              placeholder="Search KG..."
-              value={queries.kg}
-              onChange={(e: any) => handleQueryChange('kg', e.target.value)}
-              onKeyDown={(e: any) => e.key === 'Enter' && handleSearch('kg')}
-              style={{ flex: 1 }}
-            />
-            <Button onClick={() => handleSearch('kg')} primary>Search</Button>
-          </div>
-          {loadingList ? (
-            <div style={{ textAlign: 'center', color: MG(0.4), padding: '40px' }}>Searching KG...</div>
-          ) : listData.kg.length > 0 ? (
-            <Card style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                <thead>
-                  <tr style={{ borderBottom: `1px solid ${MG(0.15)}`, textAlign: 'left' }}>
-                    <th style={{ padding: '8px 12px' }}>Subject</th>
-                    <th style={{ padding: '8px 12px' }}>Predicate</th>
-                    <th style={{ padding: '8px 12px' }}>Object</th>
-                    <th style={{ padding: '8px 12px' }}>Confidence</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {listData.kg.map((item, idx) => (
-                    <tr key={idx} style={{ borderBottom: `1px solid ${MG(0.06)}` }}>
-                      <td style={{ padding: '8px 12px' }}>{item.subject}</td>
-                      <td style={{ padding: '8px 12px' }}>{item.predicate}</td>
-                      <td style={{ padding: '8px 12px' }}>{item.object}</td>
-                      <td style={{ padding: '8px 12px' }}>{item.confidence !== null && item.confidence !== undefined ? Number(item.confidence).toFixed(2) : '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </Card>
-          ) : (
-            <div style={{ textAlign: 'center', padding: '40px', color: MG(0.35) }}>No entries found.</div>
-          )}
-        </div>
-      )}
-
-      {/* Preferences Panel */}
-      {activePanel === 'preferences' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '14px', fontWeight: 600 }}>MEMORIA Preferences</span>
-            <span style={{ fontSize: '11px', color: MG(0.4) }}>{listData.preferences.length} entries</span>
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <Input
-              placeholder="Search preferences..."
-              value={queries.preferences}
-              onChange={(e: any) => handleQueryChange('preferences', e.target.value)}
-              onKeyDown={(e: any) => e.key === 'Enter' && handleSearch('preferences')}
-              style={{ flex: 1 }}
-            />
-            <Button onClick={() => handleSearch('preferences')} primary>Search</Button>
-          </div>
-          {loadingList ? (
-            <div style={{ textAlign: 'center', color: MG(0.4), padding: '40px' }}>Searching preferences...</div>
-          ) : listData.preferences.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {listData.preferences.map(renderPreference)}
-            </div>
-          ) : (
-            <div style={{ textAlign: 'center', padding: '40px', color: MG(0.35) }}>No entries found.</div>
-          )}
-        </div>
-      )}
+        )
+      ))}
     </div>
   );
 };

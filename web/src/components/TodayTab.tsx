@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, Button, Input } from '@hermes/sdk';
 import { formatDateTimeLabel, safeNumber, shortId } from '../utils/format';
+import { t } from '../utils/i18n';
 
 const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
@@ -81,11 +82,11 @@ export const TodayTab: React.FC<{
 
   const breakdownsList: Array<[string, Array<{ label: string; count: number }> | undefined]> = digest?.breakdowns
     ? [
-        ['Top Entities', digest.breakdowns.entities],
-        ['Trust Mix', digest.breakdowns.veracity],
-        ['Lifecycle', digest.breakdowns.degradation],
-        ['Sources', digest.breakdowns.sources],
-        ['Sessions', digest.breakdowns.sessions],
+        [t('today.topEntities'), digest.breakdowns.entities],
+        [t('today.trustMix'), digest.breakdowns.veracity],
+        [t('today.lifecycle'), digest.breakdowns.degradation],
+        [t('today.sources'), digest.breakdowns.sources],
+        [t('today.sessions'), digest.breakdowns.sessions],
       ]
     : [];
 
@@ -94,28 +95,28 @@ export const TodayTab: React.FC<{
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: '16px', borderBottom: `1px solid ${MG(0.1)}` }}>
         <div>
-          <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px' }}>Today in Memory</div>
-          <div style={{ fontSize: '12px', color: MG(0.45) }}>Daily digest of additions, recalls, facts, and consolidations</div>
+          <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px' }}>{t('today.subtitle')}</div>
+          <div style={{ fontSize: '12px', color: MG(0.45) }}>{t('today.digest')}</div>
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <Input type="date" value={date} onChange={(e: any) => setDate(e.target.value)} style={{ width: '160px' }} />
-          <Button onClick={resetToday} ghost>Today</Button>
+          <Button onClick={resetToday} ghost>{t('today.todayBtn')}</Button>
         </div>
       </div>
 
       {loading ? (
-        <div style={{ textAlign: 'center', color: MG(0.4), padding: '40px' }}>Loading daily digest...</div>
+        <div style={{ textAlign: 'center', color: MG(0.4), padding: '40px' }}>{t('today.loadingDigest')}</div>
       ) : (
         <>
           {/* Metric cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '10px' }}>
             {[
-              { label: 'Added', value: digest?.counts.memories_added ?? 0 },
-              { label: 'Retrieved', value: digest?.counts.memories_recalled ?? 0 },
-              { label: 'Needs Review', value: digest?.counts.contaminated_added ?? 0 },
-              { label: 'Lifecycle Changes', value: digest?.counts.degraded_added ?? 0 },
-              { label: 'Facts', value: digest?.counts.triples_added ?? 0 },
-              { label: 'Consolidations', value: digest?.counts.consolidations ?? 0 },
+              { label: t('today.added'), value: digest?.counts.memories_added ?? 0 },
+              { label: t('today.recalled'), value: digest?.counts.memories_recalled ?? 0 },
+              { label: t('today.needsReview'), value: digest?.counts.contaminated_added ?? 0 },
+              { label: t('today.lifecycleChanges'), value: digest?.counts.degraded_added ?? 0 },
+              { label: t('today.triples'), value: digest?.counts.triples_added ?? 0 },
+              { label: t('today.consolidations'), value: digest?.counts.consolidations ?? 0 },
             ].map(c => (
               <Card key={c.label}>
                 <CardContent style={{ padding: '10px', textAlign: 'center' }}>
@@ -131,7 +132,7 @@ export const TodayTab: React.FC<{
           {/* Breakdowns compact view */}
           {digest?.breakdowns && (
             <Card>
-              <CardHeader><CardTitle>Breakdowns</CardTitle></CardHeader>
+              <CardHeader><CardTitle>{t('today.breakdowns')}</CardTitle></CardHeader>
               <CardContent style={{ padding: '16px 20px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '16px' }}>
                   {breakdownsList.map(([label, rows]) => (
@@ -146,7 +147,7 @@ export const TodayTab: React.FC<{
                             <strong>{row.count}</strong>
                           </div>
                         ))}
-                        {!(rows || []).length && <div style={{ color: MG(0.35), fontSize: '11px' }}>No data</div>}
+                        {!(rows || []).length && <div style={{ color: MG(0.35), fontSize: '11px' }}>{t('common.noData')}</div>}
                       </div>
                     </div>
                   ))}
@@ -157,10 +158,10 @@ export const TodayTab: React.FC<{
 
           {/* Subpanels tabs navigation */}
           <div style={{ display: 'flex', gap: '4px', borderBottom: `1px solid ${MG(0.1)}`, paddingBottom: '8px', marginTop: '8px' }}>
-            <Button onClick={() => setActiveSubPanel('added')} ghost={activeSubPanel !== 'added'} primary={activeSubPanel === 'added'} style={{ fontSize: '12px', padding: '6px 12px', height: '30px' }}>Added</Button>
-            <Button onClick={() => setActiveSubPanel('recalled')} ghost={activeSubPanel !== 'recalled'} primary={activeSubPanel === 'recalled'} style={{ fontSize: '12px', padding: '6px 12px', height: '30px' }}>Recalled</Button>
-            <Button onClick={() => setActiveSubPanel('triples')} ghost={activeSubPanel !== 'triples'} primary={activeSubPanel === 'triples'} style={{ fontSize: '12px', padding: '6px 12px', height: '30px' }}>Triples</Button>
-            <Button onClick={() => setActiveSubPanel('consolidations')} ghost={activeSubPanel !== 'consolidations'} primary={activeSubPanel === 'consolidations'} style={{ fontSize: '12px', padding: '6px 12px', height: '30px' }}>Consolidations</Button>
+            <Button onClick={() => setActiveSubPanel('added')} ghost={activeSubPanel !== 'added'} primary={activeSubPanel === 'added'} style={{ fontSize: '12px', padding: '6px 12px', height: '30px' }}>{t('today.added')}</Button>
+            <Button onClick={() => setActiveSubPanel('recalled')} ghost={activeSubPanel !== 'recalled'} primary={activeSubPanel === 'recalled'} style={{ fontSize: '12px', padding: '6px 12px', height: '30px' }}>{t('today.recalled')}</Button>
+            <Button onClick={() => setActiveSubPanel('triples')} ghost={activeSubPanel !== 'triples'} primary={activeSubPanel === 'triples'} style={{ fontSize: '12px', padding: '6px 12px', height: '30px' }}>{t('today.triples')}</Button>
+            <Button onClick={() => setActiveSubPanel('consolidations')} ghost={activeSubPanel !== 'consolidations'} primary={activeSubPanel === 'consolidations'} style={{ fontSize: '12px', padding: '6px 12px', height: '30px' }}>{t('today.consolidations')}</Button>
           </div>
 
           {/* Subpanel lists */}
@@ -197,7 +198,7 @@ export const TodayTab: React.FC<{
                     </div>
                   ))
                 ) : (
-                  <div style={{ color: MG(0.35), fontSize: '12px', textAlign: 'center', padding: '20px' }}>No memories added today.</div>
+                  <div style={{ color: MG(0.35), fontSize: '12px', textAlign: 'center', padding: '20px' }}>{t('today.noAdded')}</div>
                 )}
               </div>
             )}
@@ -234,7 +235,7 @@ export const TodayTab: React.FC<{
                     </div>
                   ))
                 ) : (
-                  <div style={{ color: MG(0.35), fontSize: '12px', textAlign: 'center', padding: '20px' }}>No memories recalled today.</div>
+                  <div style={{ color: MG(0.35), fontSize: '12px', textAlign: 'center', padding: '20px' }}>{t('today.noRecalled')}</div>
                 )}
               </div>
             )}
@@ -243,10 +244,10 @@ export const TodayTab: React.FC<{
             {activeSubPanel === 'triples' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {digest?.triples_added && digest.triples_added.length > 0 ? (
-                  digest.triples_added.map((t, idx) => (
+                  digest.triples_added.map((tItem, idx) => (
                     <div
-                      key={t.id || idx}
-                      onClick={() => onInspectJson(t, 'Triple detail')}
+                      key={tItem.id || idx}
+                      onClick={() => onInspectJson(tItem, 'Triple detail')}
                       style={{
                         padding: '10px 12px', borderRadius: '4px', cursor: 'pointer',
                         background: MG(0.03), border: `1px solid ${MG(0.07)}`,
@@ -254,16 +255,16 @@ export const TodayTab: React.FC<{
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', color: MG(0.45), marginBottom: '4px' }}>
-                        <span>fact</span>
-                        <span>{formatDateTimeLabel(t.created_at || t.valid_from)}</span>
+                        <span>{t('today.triples').toLowerCase()}</span>
+                        <span>{formatDateTimeLabel(tItem.created_at || tItem.valid_from)}</span>
                       </div>
                       <div>
-                        <strong>{t.subject}</strong> — {t.predicate} → <strong>{t.object}</strong>
+                        <strong>{tItem.subject}</strong> — {tItem.predicate} → <strong>{tItem.object}</strong>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div style={{ color: MG(0.35), fontSize: '12px', textAlign: 'center', padding: '20px' }}>No facts added today.</div>
+                  <div style={{ color: MG(0.35), fontSize: '12px', textAlign: 'center', padding: '20px' }}>{t('today.noTriples')}</div>
                 )}
               </div>
             )}
@@ -272,10 +273,10 @@ export const TodayTab: React.FC<{
             {activeSubPanel === 'consolidations' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {digest?.consolidations && digest.consolidations.length > 0 ? (
-                  digest.consolidations.map((c, idx) => (
+                  digest.consolidations.map((cItem, idx) => (
                     <div
-                      key={c.id || idx}
-                      onClick={() => onInspectJson(c, 'Consolidation detail')}
+                      key={cItem.id || idx}
+                      onClick={() => onInspectJson(cItem, 'Consolidation detail')}
                       style={{
                         padding: '10px 12px', borderRadius: '4px', cursor: 'pointer',
                         background: MG(0.03), border: `1px solid ${MG(0.07)}`,
@@ -283,16 +284,16 @@ export const TodayTab: React.FC<{
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', color: MG(0.45), marginBottom: '4px' }}>
-                        <span>consolidation · {c.items_consolidated} items</span>
-                        <span>{formatDateTimeLabel(c.created_at)}</span>
+                        <span>{t('today.consolidations').toLowerCase()} · {cItem.items_consolidated} {t('contextBank.items')}</span>
+                        <span>{formatDateTimeLabel(cItem.created_at)}</span>
                       </div>
                       <div>
-                        <strong style={{ fontFamily: 'var(--theme-font-mono)' }}>{c.session_id}</strong>: {c.summary_preview}
+                        <strong style={{ fontFamily: 'var(--theme-font-mono)' }}>{cItem.session_id}</strong>: {cItem.summary_preview}
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div style={{ color: MG(0.35), fontSize: '12px', textAlign: 'center', padding: '20px' }}>No consolidations today.</div>
+                  <div style={{ color: MG(0.35), fontSize: '12px', textAlign: 'center', padding: '20px' }}>{t('today.noConsolidations')}</div>
                 )}
               </div>
             )}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge } from '@hermes/sdk';
 import { safeNumber } from '../utils/format';
+import { t } from '../utils/i18n';
 
 const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
@@ -36,13 +37,13 @@ export const ContextBankTab: React.FC = () => {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div style={{ padding: '32px', color: MG(0.4), textAlign: 'center' }}>Loading context bank profile...</div>;
+  if (loading) return <div style={{ padding: '32px', color: MG(0.4), textAlign: 'center' }}>{t('contextBank.loading')}</div>;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <div>
-        <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px' }}>Context Bank</div>
-        <div style={{ fontSize: '12px', color: MG(0.45) }}>Inferred profile entities, preferences, and active context segments</div>
+        <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px' }}>{t('contextBank.title')}</div>
+        <div style={{ fontSize: '12px', color: MG(0.45) }}>{t('contextBank.subtitle')}</div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
@@ -52,7 +53,7 @@ export const ContextBankTab: React.FC = () => {
               <CardHeader>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <CardTitle>{section.name.replace(/_/g, ' ')}</CardTitle>
-                  <Badge>{section.count} item{section.count === 1 ? '' : 's'}</Badge>
+                  <Badge>{section.count} {section.count === 1 ? t('contextBank.item') : t('contextBank.items')}</Badge>
                 </div>
               </CardHeader>
               <CardContent>
@@ -80,7 +81,7 @@ export const ContextBankTab: React.FC = () => {
                       </div>
                     ))
                   ) : (
-                    <div style={{ fontSize: '12px', color: MG(0.35), textAlign: 'center', padding: '12px' }}>No active context found in this segment.</div>
+                    <div style={{ fontSize: '12px', color: MG(0.35), textAlign: 'center', padding: '12px' }}>{t('contextBank.noActiveContext')}</div>
                   )}
                 </div>
               </CardContent>
@@ -88,7 +89,7 @@ export const ContextBankTab: React.FC = () => {
           ))
         ) : (
           <div style={{ gridColumn: 'span 2', padding: '40px', textAlign: 'center', color: MG(0.35), border: `1px dashed ${MG(0.15)}`, borderRadius: '4px', fontSize: '13px' }}>
-            No inferred profile records found.
+            {t('contextBank.noRecords')}
           </div>
         )}
       </div>

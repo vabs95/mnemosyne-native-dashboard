@@ -14,6 +14,7 @@ import { HistoryTab } from './components/HistoryTab';
 import { SettingsTab } from './components/SettingsTab';
 import { Button } from '@hermes/sdk';
 import { formatDateTimeLabel, safeNumber } from './utils/format';
+import { t } from './utils/i18n';
 
 interface MemoryItem {
   id: string;
@@ -44,17 +45,17 @@ interface MemoryItem {
 const API = '/api/plugins/mnemosyne-native-dashboard';
 
 const TABS = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'today', label: 'Today' },
-  { id: 'visualiser', label: 'Visualiser' },
-  { id: 'review', label: 'Review' },
-  { id: 'memories', label: 'Memories' },
-  { id: 'profile', label: 'Context Bank' },
-  { id: 'lifecycle', label: 'Lifecycle' },
-  { id: 'graph', label: 'Graph' },
-  { id: 'memoria', label: 'MEMORIA' },
-  { id: 'activity', label: 'History' },
-  { id: 'settings', label: 'Settings' },
+  { id: 'overview' },
+  { id: 'today' },
+  { id: 'visualiser' },
+  { id: 'review' },
+  { id: 'memories' },
+  { id: 'profile' },
+  { id: 'lifecycle' },
+  { id: 'graph' },
+  { id: 'memoria' },
+  { id: 'activity' },
+  { id: 'settings' },
 ];
 
 const getVeracityColor = (veracity: string | undefined | null) => {
@@ -193,7 +194,7 @@ const MnemosyneDashboard: React.FC = () => {
             background: adminMode ? '#4ade80' : 'rgba(234,234,234,0.3)',
             display: 'inline-block',
           }} />
-          <span>{adminMode ? 'Admin Active' : 'Read-Only'}</span>
+          <span>{adminMode ? t('index.adminActive') : t('index.readOnly')}</span>
         </div>
       </div>
 
@@ -204,14 +205,14 @@ const MnemosyneDashboard: React.FC = () => {
           return (
             <>
               <TabsList style={{ marginBottom: '20px', flexWrap: 'wrap', height: 'auto', gap: '2px' }}>
-                {TABS.map(t => (
+                {TABS.map(tTab => (
                   <TabsTrigger
-                    key={t.id}
-                    value={t.id}
-                    active={tab === t.id}
-                    onClick={() => setActiveValue(t.id)}
+                    key={tTab.id}
+                    value={tTab.id}
+                    active={tab === tTab.id}
+                    onClick={() => setActiveValue(tTab.id)}
                   >
-                    {t.label}
+                    {t('tabs.' + tTab.id)}
                   </TabsTrigger>
                 ))}
               </TabsList>
@@ -299,7 +300,7 @@ const MnemosyneDashboard: React.FC = () => {
               background: 'rgba(234,234,234,0.03)',
             }}>
               <div>
-                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(234,234,234,0.4)', marginBottom: '4px' }}>Memory Record</div>
+                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(234,234,234,0.4)', marginBottom: '4px' }}>{t('index.memoryRecord')}</div>
                 <div style={{ fontSize: '11px', fontFamily: 'var(--theme-font-mono)', color: 'rgba(234,234,234,0.6)', wordBreak: 'break-all' }}>{inspectedMemoryId}</div>
               </div>
               <button
@@ -311,31 +312,31 @@ const MnemosyneDashboard: React.FC = () => {
             {/* Content */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '20px', scrollBehavior: 'smooth' }}>
               {loadingDetail && !inspectedMemory ? (
-                <div style={{ textAlign: 'center', color: 'rgba(234,234,234,0.4)', padding: '40px' }}>Loading memory record...</div>
+                <div style={{ textAlign: 'center', color: 'rgba(234,234,234,0.4)', padding: '40px' }}>{t('index.loadingRecord')}</div>
               ) : inspectedMemory ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   {/* Trust strip */}
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                     <Badge style={{ background: getVeracityColor(inspectedMemory.veracity) }}>
-                      {inspectedMemory.veracity} trust (×{safeNumber(inspectedMemory.trust_weight, 2, '1.00')})
+                      {inspectedMemory.veracity} {t('index.trust')} (×{safeNumber(inspectedMemory.trust_weight, 2, '1.00')})
                     </Badge>
                     <Badge style={{ background: getLifecycleColor(inspectedMemory.degradation_label) }}>
-                      {inspectedMemory.degradation_label ? `${inspectedMemory.degradation_label} tier ${inspectedMemory.degradation_tier}` : 'not degraded'}
+                      {inspectedMemory.degradation_label ? `${inspectedMemory.degradation_label} ${t('index.tier')} ${inspectedMemory.degradation_tier}` : t('index.notDegraded')}
                       {inspectedMemory.degradation_weight !== undefined && inspectedMemory.degradation_weight !== null ? ` (×${safeNumber(inspectedMemory.degradation_weight, 2)})` : ''}
                     </Badge>
                     <Badge style={{ background: 'rgba(234,234,234,0.06)', border: '1px solid rgba(234,234,234,0.15)' }}>
-                      effective weight: ×{safeNumber(inspectedMemory.effective_memory_weight, 2, '0.00')}
+                      {t('index.effectiveWeight')} ×{safeNumber(inspectedMemory.effective_memory_weight, 2, '0.00')}
                     </Badge>
                     {inspectedMemory.contaminated && (
                       <Badge style={{ background: '#991b1b', color: '#fca5a5' }}>
-                        needs review
+                        {t('index.needsReview')}
                       </Badge>
                     )}
                   </div>
 
                   {/* Content block */}
                   <div>
-                    <div style={{ fontSize: '11px', color: 'rgba(234,234,234,0.45)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Content</div>
+                    <div style={{ fontSize: '11px', color: 'rgba(234,234,234,0.45)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t('index.content')}</div>
                     <div style={{
                       padding: '14px', borderRadius: '4px',
                       background: 'rgba(234,234,234,0.04)', border: '1px solid rgba(234,234,234,0.1)',
@@ -345,7 +346,7 @@ const MnemosyneDashboard: React.FC = () => {
 
                   {/* Comprehensive Diagnostics Table */}
                   <div>
-                    <div style={{ fontSize: '11px', color: 'rgba(234,234,234,0.45)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Diagnostics</div>
+                    <div style={{ fontSize: '11px', color: 'rgba(234,234,234,0.45)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t('index.diagnostics')}</div>
                     <div style={{ fontSize: '12px', fontFamily: 'var(--theme-font-mono)', color: 'rgba(234,234,234,0.5)', display: 'flex', flexDirection: 'column' }}>
                       {[
                         ['Memory ID', inspectedMemory.id],
@@ -395,7 +396,7 @@ const MnemosyneDashboard: React.FC = () => {
                     if (typeof parsed === 'object' && Object.keys(parsed).length === 0) return null;
                     return (
                       <div>
-                        <div style={{ fontSize: '11px', color: 'rgba(234,234,234,0.45)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Metadata</div>
+                        <div style={{ fontSize: '11px', color: 'rgba(234,234,234,0.45)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t('common.metadata')}</div>
                         <pre style={{
                           padding: '12px', borderRadius: '4px', background: 'rgba(234,234,234,0.04)',
                           fontSize: '11px', overflowX: 'auto', maxHeight: '160px',
@@ -408,13 +409,13 @@ const MnemosyneDashboard: React.FC = () => {
                   })()}
                 </div>
               ) : (
-                <div style={{ textAlign: 'center', color: '#f87171', padding: '40px', fontSize: '13px' }}>Memory record could not be found.</div>
+                <div style={{ textAlign: 'center', color: '#f87171', padding: '40px', fontSize: '13px' }}>{t('index.noRecordFound')}</div>
               )}
             </div>
 
             {/* Footer */}
             <div style={{ padding: '12px 20px', borderTop: '1px solid rgba(234,234,234,0.1)', display: 'flex', justifyContent: 'flex-end' }}>
-              <Button onClick={() => handleInspectMemory(null)}>Close</Button>
+              <Button onClick={() => handleInspectMemory(null)}>{t('common.close')}</Button>
             </div>
           </div>
         </div>
@@ -439,7 +440,7 @@ const MnemosyneDashboard: React.FC = () => {
               background: 'rgba(234,234,234,0.03)',
             }}>
               <div>
-                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(234,234,234,0.4)', marginBottom: '4px' }}>Session Details</div>
+                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(234,234,234,0.4)', marginBottom: '4px' }}>{t('index.sessionDetails')}</div>
                 <div style={{ fontSize: '11px', fontFamily: 'var(--theme-font-mono)', color: 'rgba(234,234,234,0.6)', wordBreak: 'break-all' }}>{inspectedSessionId}</div>
               </div>
               <button
@@ -451,13 +452,13 @@ const MnemosyneDashboard: React.FC = () => {
             {/* Content */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
               {loadingSession ? (
-                <div style={{ textAlign: 'center', color: 'rgba(234,234,234,0.4)', padding: '40px' }}>Loading session details...</div>
+                <div style={{ textAlign: 'center', color: 'rgba(234,234,234,0.4)', padding: '40px' }}>{t('index.loadingSession')}</div>
               ) : inspectedSession ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   <div style={{ fontSize: '12px', color: 'rgba(234,234,234,0.5)', fontFamily: 'var(--theme-font-mono)', display: 'flex', gap: '16px', borderBottom: '1px solid rgba(234,234,234,0.08)', paddingBottom: '10px' }}>
-                    <span>Memories: <strong>{inspectedSession.counts?.memories ?? 0}</strong></span>
-                    <span>Facts: <strong>{inspectedSession.counts?.triples ?? 0}</strong></span>
-                    <span>Consolidations: <strong>{inspectedSession.counts?.consolidations ?? 0}</strong></span>
+                    <span>{t('index.memories')} <strong>{inspectedSession.counts?.memories ?? 0}</strong></span>
+                    <span>{t('index.facts')} <strong>{inspectedSession.counts?.triples ?? 0}</strong></span>
+                    <span>{t('index.consolidations')} <strong>{inspectedSession.counts?.consolidations ?? 0}</strong></span>
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -480,18 +481,18 @@ const MnemosyneDashboard: React.FC = () => {
                         </div>
                       ))
                     ) : (
-                      <div style={{ textAlign: 'center', padding: '40px', color: 'rgba(234,234,234,0.35)', fontSize: '12px' }}>No session events found.</div>
+                      <div style={{ textAlign: 'center', padding: '40px', color: 'rgba(234,234,234,0.35)', fontSize: '12px' }}>{t('index.noSessionEvents')}</div>
                     )}
                   </div>
                 </div>
               ) : (
-                <div style={{ textAlign: 'center', color: '#f87171', padding: '40px', fontSize: '13px' }}>Session could not be loaded.</div>
+                <div style={{ textAlign: 'center', color: '#f87171', padding: '40px', fontSize: '13px' }}>{t('index.sessionNotLoaded')}</div>
               )}
             </div>
 
             {/* Footer */}
             <div style={{ padding: '12px 20px', borderTop: '1px solid rgba(234,234,234,0.1)', display: 'flex', justifyContent: 'flex-end' }}>
-              <Button onClick={() => setInspectedSessionId(null)}>Close</Button>
+              <Button onClick={() => setInspectedSessionId(null)}>{t('common.close')}</Button>
             </div>
           </div>
         </div>

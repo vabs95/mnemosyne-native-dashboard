@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Button, Checkbox } from '@hermes/sdk';
 import { safeNumber } from '../utils/format';
+import { t } from '../utils/i18n';
 
 const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
@@ -50,11 +51,11 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ adminMode, onToggleAdm
   }
 
   async function handleToggleAdmin(checked: boolean) {
-    setActionStatus('Saving...');
+    setActionStatus(t('settings.saving'));
     try {
       const res = await fetchJSON(`${API}/config`, { method: 'POST', body: JSON.stringify({ memory_admin_enabled: checked }) });
       onToggleAdminMode(res.config.memory_admin_enabled);
-      setActionStatus('Saved');
+      setActionStatus(t('settings.saved'));
       setTimeout(() => setActionStatus(''), 2000);
     } catch (err: any) {
       setActionStatus(`Error: ${err.message}`);
@@ -62,10 +63,10 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ adminMode, onToggleAdm
   }
 
   async function handleCreateBackup() {
-    setActionStatus('Creating backup...');
+    setActionStatus(t('settings.creatingBackup'));
     try {
       const res = await fetchJSON(`${API}/admin/backup`, { method: 'POST' });
-      setActionStatus(`Backup created: ${res.backup?.path || 'done'}`);
+      setActionStatus(`${t('settings.backupCreated')}: ${res.backup?.path || 'done'}`);
       loadDiagnostics();
     } catch (err: any) {
       setActionStatus(`Error: ${err.message}`);
@@ -78,7 +79,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ adminMode, onToggleAdm
       setAuditLogs(res.items || []);
       setShowAudits(true);
     } catch (err: any) {
-      alert(`Failed to load audit logs: ${err.message}`);
+      alert(`${t('settings.failedAuditLogs')}: ${err.message}`);
     }
   }
 
@@ -96,12 +97,11 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ adminMode, onToggleAdm
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
         {/* Memory Maintenance */}
         <Card>
-          <CardHeader><CardTitle>Memory Maintenance</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t('settings.memoryMaintenance')}</CardTitle></CardHeader>
           <CardContent>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <p style={{ fontSize: '12px', color: MG(0.55), lineHeight: '1.6' }}>
-                Enable admin maintenance mode to supersede, expire, or invalidate selected memories.
-                Database backups are highly recommended before executing any database modifications.
+                {t('settings.maintenanceInfo')}
               </p>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -111,13 +111,13 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ adminMode, onToggleAdm
                   onCheckedChange={(checked: boolean) => handleToggleAdmin(!!checked)}
                 />
                 <label htmlFor="adminModeToggle" style={{ fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>
-                  Enable Admin Maintenance Mode
+                  {t('settings.enableAdminMode')}
                 </label>
               </div>
 
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                <Button ghost onClick={handleCreateBackup}>Create Database Backup</Button>
-                {adminMode && <Button ghost onClick={handleLoadAuditLogs}>View Audit Logs</Button>}
+                <Button ghost onClick={handleCreateBackup}>{t('settings.createBackup')}</Button>
+                {adminMode && <Button ghost onClick={handleLoadAuditLogs}>{t('settings.viewAuditLogs')}</Button>}
               </div>
 
               {actionStatus && (
@@ -131,10 +131,10 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ adminMode, onToggleAdm
 
         {/* Database Diagnostics */}
         <Card>
-          <CardHeader><CardTitle>Database Diagnostics</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t('settings.databaseDiagnostics')}</CardTitle></CardHeader>
           <CardContent>
             {loading ? (
-              <div style={{ color: MG(0.4), fontSize: '12px' }}>Running diagnostic reports...</div>
+              <div style={{ color: MG(0.4), fontSize: '12px' }}>{t('settings.runningDiagnostics')}</div>
             ) : diagnostics ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', fontFamily: 'var(--theme-font-mono)' }}>
                 {[
@@ -151,12 +151,12 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ adminMode, onToggleAdm
                   </div>
                 ))}
                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '6px', borderBottom: `1px solid ${MG(0.07)}` }}>
-                  <span style={{ color: MG(0.5) }}>Size</span>
+                  <span style={{ color: MG(0.5) }}>{t('settings.size')}</span>
                   <span>{safeNumber(fileSizeBytes / 1024, 1, 'n/a')} KB</span>
                 </div>
 
                 <div style={{ paddingTop: '8px' }}>
-                  <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: MG(0.4), marginBottom: '8px' }}>Table Rows</div>
+                  <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: MG(0.4), marginBottom: '8px' }}>{t('settings.tableRows')}</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
                     {Object.entries(diagnostics.table_counts).map(([tbl, count]) => (
                       <div key={tbl} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: MG(0.04), borderRadius: '4px', border: `1px solid ${MG(0.07)}` }}>
@@ -168,7 +168,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ adminMode, onToggleAdm
                 </div>
               </div>
             ) : (
-              <div style={{ color: MG(0.35), fontSize: '12px' }}>No diagnostic metrics available.</div>
+              <div style={{ color: MG(0.35), fontSize: '12px' }}>{t('settings.noDiagnostics')}</div>
             )}
           </CardContent>
         </Card>
@@ -179,8 +179,8 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ adminMode, onToggleAdm
         <Card>
           <CardHeader>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <CardTitle>Memory Modification Audit Logs</CardTitle>
-              <Button ghost onClick={() => setShowAudits(false)}>Close Logs</Button>
+              <CardTitle>{t('settings.auditLogsTitle')}</CardTitle>
+              <Button ghost onClick={() => setShowAudits(false)}>{t('settings.closeLogs')}</Button>
             </div>
           </CardHeader>
           <CardContent>
@@ -194,7 +194,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ adminMode, onToggleAdm
                   </div>
                 ))
               ) : (
-                <div style={{ textAlign: 'center', color: MG(0.35), padding: '20px' }}>No audit log records found.</div>
+                <div style={{ textAlign: 'center', color: MG(0.35), padding: '20px' }}>{t('settings.noAuditLogs')}</div>
               )}
             </div>
           </CardContent>

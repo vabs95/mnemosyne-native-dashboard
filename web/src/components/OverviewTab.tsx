@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, timeAgo, Button } from '@hermes/sdk';
 import { formatRelativeTime, safeNumber, shortId } from '../utils/format';
+import { t } from '../utils/i18n';
 
 const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = 'rgba(234,234,234,'; // midground base shorthand
 
 interface OverviewStats {
-  counts: { working_memory: number; episodic_memory: number; triples: number; consolidation_log: number; };
+  counts: { working_memory: number; episodic_memory: number; triples: number; consolidation_log: number; scratchpad?: number; };
   by_veracity?: { veracity: string; count: number }[];
   by_source?: { source: string; count: number }[];
   by_scope?: { scope: string; count: number }[];
@@ -72,30 +73,31 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div style={{ padding: '32px', color: `${MG}0.4)`, textAlign: 'center' }}>Loading overview metrics...</div>;
+  if (loading) return <div style={{ padding: '32px', color: `${MG}0.4)`, textAlign: 'center' }}>{t('common.loading')}</div>;
 
-  const counts = stats?.counts ?? { working_memory: 0, episodic_memory: 0, triples: 0, consolidation_log: 0 };
+  const counts = stats?.counts ?? { working_memory: 0, episodic_memory: 0, triples: 0, consolidation_log: 0, scratchpad: 0 };
   const contaminationTotal = stats?.contamination?.total ?? 0;
   const degradationTotal = stats?.degradation?.degraded ?? 0;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-      {/* 6 Stat Cards Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-        <StatCard title="Working Memory" count={counts.working_memory} desc="Short-term active thoughts" icon="🧠" onClick={() => onApplyFilters({ kind: 'working' })} />
-        <StatCard title="Episodic Memory" count={counts.episodic_memory} desc="Archived session memories" icon="📖" onClick={() => onApplyFilters({ kind: 'episodic' })} />
-        <StatCard title="Needs Review" count={contaminationTotal} desc="Unverified/contaminated logs" icon="⚑" onClick={() => onNavigateToTab('review')} />
-        <StatCard title="Degraded" count={degradationTotal} desc="Decayed episodic summaries" icon="◴" onClick={() => onNavigateToTab('lifecycle')} />
-        <StatCard title="Triples" count={counts.triples} desc="Extracted semantic facts" icon="◎" onClick={() => onNavigateToTab('graph')} />
-        <StatCard title="Consolidations" count={counts.consolidation_log} desc="Episodic summaries built" icon="✦" onClick={() => onNavigateToTab('activity')} />
+      {/* 7 Stat Cards Row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+        <StatCard title={t('overview.workingMemory')} count={counts.working_memory} desc={t('overview.workingDesc')} icon="🧠" onClick={() => onApplyFilters({ kind: 'working' })} />
+        <StatCard title={t('overview.episodicMemory')} count={counts.episodic_memory} desc={t('overview.episodicDesc')} icon="📖" onClick={() => onApplyFilters({ kind: 'episodic' })} />
+        <StatCard title={t('overview.scratchpad')} count={counts.scratchpad ?? 0} desc={t('overview.scratchpadDesc')} icon="📝" />
+        <StatCard title={t('overview.needsReview')} count={contaminationTotal} desc={t('overview.needsReviewDesc')} icon="⚑" onClick={() => onNavigateToTab('review')} />
+        <StatCard title={t('overview.degraded')} count={degradationTotal} desc={t('overview.degradedDesc')} icon="◴" onClick={() => onNavigateToTab('lifecycle')} />
+        <StatCard title={t('overview.triples')} count={counts.triples} desc={t('overview.triplesDesc')} icon="◎" onClick={() => onNavigateToTab('graph')} />
+        <StatCard title={t('overview.consolidations')} count={counts.consolidation_log} desc={t('overview.consolidationsDesc')} icon="✦" onClick={() => onNavigateToTab('activity')} />
       </div>
 
       {/* 5 Breakdowns Row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px' }}>
         {/* Trust mix */}
         <Card>
-          <CardHeader><CardTitle style={{ fontSize: '12px' }}>Trust mix</CardTitle></CardHeader>
+          <CardHeader><CardTitle style={{ fontSize: '12px' }}>{t('overview.trustMix')}</CardTitle></CardHeader>
           <CardContent style={{ padding: '10px 14px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {(stats?.by_veracity ?? []).map(({ veracity, count }) => (
@@ -108,14 +110,14 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
                   <Badge>{String(count)}</Badge>
                 </div>
               ))}
-              {!stats?.by_veracity?.length && <div style={{ color: `${MG}0.35)`, fontSize: '11px' }}>No data</div>}
+              {!stats?.by_veracity?.length && <div style={{ color: `${MG}0.35)`, fontSize: '11px' }}>{t('overview.noData')}</div>}
             </div>
           </CardContent>
         </Card>
 
         {/* Lifecycle */}
         <Card>
-          <CardHeader><CardTitle style={{ fontSize: '12px' }}>Lifecycle</CardTitle></CardHeader>
+          <CardHeader><CardTitle style={{ fontSize: '12px' }}>{t('overview.lifecycle')}</CardTitle></CardHeader>
           <CardContent style={{ padding: '10px 14px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {(stats?.by_degradation ?? []).map(({ degradation_label, count }) => {
@@ -131,14 +133,14 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
                   </div>
                 );
               })}
-              {!stats?.by_degradation?.length && <div style={{ color: `${MG}0.35)`, fontSize: '11px' }}>No data</div>}
+              {!stats?.by_degradation?.length && <div style={{ color: `${MG}0.35)`, fontSize: '11px' }}>{t('overview.noData')}</div>}
             </div>
           </CardContent>
         </Card>
 
         {/* Sources */}
         <Card>
-          <CardHeader><CardTitle style={{ fontSize: '12px' }}>Sources</CardTitle></CardHeader>
+          <CardHeader><CardTitle style={{ fontSize: '12px' }}>{t('overview.sources')}</CardTitle></CardHeader>
           <CardContent style={{ padding: '10px 14px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {(stats?.by_source ?? []).slice(0, 6).map(({ source, count }) => (
@@ -151,14 +153,14 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
                   <Badge>{String(count)}</Badge>
                 </div>
               ))}
-              {!stats?.by_source?.length && <div style={{ color: `${MG}0.35)`, fontSize: '11px' }}>No data</div>}
+              {!stats?.by_source?.length && <div style={{ color: `${MG}0.35)`, fontSize: '11px' }}>{t('overview.noData')}</div>}
             </div>
           </CardContent>
         </Card>
 
         {/* Scopes */}
         <Card>
-          <CardHeader><CardTitle style={{ fontSize: '12px' }}>Scopes</CardTitle></CardHeader>
+          <CardHeader><CardTitle style={{ fontSize: '12px' }}>{t('overview.scopes')}</CardTitle></CardHeader>
           <CardContent style={{ padding: '10px 14px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {(stats?.by_scope ?? []).slice(0, 6).map(({ scope, count }) => (
@@ -171,14 +173,14 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
                   <Badge>{String(count)}</Badge>
                 </div>
               ))}
-              {!stats?.by_scope?.length && <div style={{ color: `${MG}0.35)`, fontSize: '11px' }}>No data</div>}
+              {!stats?.by_scope?.length && <div style={{ color: `${MG}0.35)`, fontSize: '11px' }}>{t('overview.noData')}</div>}
             </div>
           </CardContent>
         </Card>
 
         {/* Top sessions */}
         <Card>
-          <CardHeader><CardTitle style={{ fontSize: '12px' }}>Top sessions</CardTitle></CardHeader>
+          <CardHeader><CardTitle style={{ fontSize: '12px' }}>{t('overview.topSessions')}</CardTitle></CardHeader>
           <CardContent style={{ padding: '10px 14px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {(stats?.by_session ?? []).slice(0, 6).map(({ session_id, count }) => (
@@ -191,7 +193,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
                   <Badge>{String(count)}</Badge>
                 </div>
               ))}
-              {!stats?.by_session?.length && <div style={{ color: `${MG}0.35)`, fontSize: '11px' }}>No data</div>}
+              {!stats?.by_session?.length && <div style={{ color: `${MG}0.35)`, fontSize: '11px' }}>{t('overview.noData')}</div>}
             </div>
           </CardContent>
         </Card>
@@ -201,8 +203,8 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
       <Card>
         <CardHeader>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <CardTitle>Live Memory Log</CardTitle>
-            <span style={{ fontSize: '11px', color: `${MG}0.4)` }}>Showing 25 latest</span>
+            <CardTitle>{t('overview.liveMemoryLog')}</CardTitle>
+            <span style={{ fontSize: '11px', color: `${MG}0.4)` }}>{t('overview.showingLatest')}</span>
           </div>
         </CardHeader>
         <CardContent>
@@ -240,7 +242,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
                 </div>
               </div>
             ))}
-            {!memories.length && <div style={{ color: `${MG}0.35)`, fontSize: '12px', textAlign: 'center', padding: '20px' }}>No memories found.</div>}
+            {!memories.length && <div style={{ color: `${MG}0.35)`, fontSize: '12px', textAlign: 'center', padding: '20px' }}>{t('overview.noMemories')}</div>}
           </div>
         </CardContent>
       </Card>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Button, Badge } from '@hermes/sdk';
 import { formatDateTimeLabel, safeNumber, shortId } from '../utils/format';
+import { t } from '../utils/i18n';
 
 const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
@@ -77,15 +78,15 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ onInspectMemory }) => {
       {/* Left: Timeline */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '12px', borderBottom: `1px solid ${MG(0.1)}` }}>
-          <div style={{ fontSize: '14px', fontWeight: 600 }}>Chronological Memory Timeline</div>
+          <div style={{ fontSize: '14px', fontWeight: 600 }}>{t('history.title')}</div>
           <div style={{ display: 'flex', gap: '4px' }}>
-            <Button onClick={() => setGrouping('day')} outlined={grouping !== 'day'}>By Day</Button>
-            <Button onClick={() => setGrouping('session')} outlined={grouping !== 'session'}>By Session</Button>
+            <Button onClick={() => setGrouping('day')} outlined={grouping !== 'day'}>{t('history.byDay')}</Button>
+            <Button onClick={() => setGrouping('session')} outlined={grouping !== 'session'}>{t('history.bySession')}</Button>
           </div>
         </div>
 
         {loading ? (
-          <div style={{ padding: '32px', color: MG(0.4), textAlign: 'center' }}>Loading timeline events...</div>
+          <div style={{ padding: '32px', color: MG(0.4), textAlign: 'center' }}>{t('history.loadingTimeline')}</div>
         ) : timeline.length > 0 ? (
           <div style={{ maxHeight: '600px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {timeline.map((group, idx) => (
@@ -96,7 +97,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ onInspectMemory }) => {
                   padding: '6px 0', borderBottom: `1px solid ${MG(0.1)}`, zIndex: 5,
                 }}>
                   <div style={{ fontSize: '12px', fontWeight: 700, fontFamily: 'var(--theme-font-mono)', color: MG(0.8) }}>{group.key}</div>
-                  <Badge>{group.count} event{group.count === 1 ? '' : 's'}</Badge>
+                  <Badge>{group.count} {group.count === 1 ? t('history.event') : t('history.events')}</Badge>
                 </div>
 
                 <div style={{ paddingLeft: '12px', borderLeft: `2px solid ${MG(0.15)}`, display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -132,7 +133,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ onInspectMemory }) => {
           </div>
         ) : (
           <div style={{ padding: '32px', border: `1px dashed ${MG(0.15)}`, borderRadius: '4px', textAlign: 'center', color: MG(0.35), fontSize: '13px' }}>
-            No events recorded in memory yet.
+            {t('history.noEvents')}
           </div>
         )}
       </div>
@@ -143,14 +144,14 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ onInspectMemory }) => {
           <Card>
             <CardHeader>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <CardTitle>Session Details</CardTitle>
-                <Button ghost onClick={() => setSelectedSession(null)}>Close</Button>
+                <CardTitle>{t('history.sessionDetails')}</CardTitle>
+                <Button ghost onClick={() => setSelectedSession(null)}>{t('common.close')}</Button>
               </div>
             </CardHeader>
             <CardContent>
               <div style={{ fontSize: '11px', fontFamily: 'var(--theme-font-mono)', display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '12px', color: MG(0.5) }}>
-                <div>Session: {selectedSession.session_id}</div>
-                <div>Count: {selectedSession.memories_count}</div>
+                <div>{t('history.session')}: {selectedSession.session_id}</div>
+                <div>{t('history.count')}: {selectedSession.memories_count}</div>
               </div>
               <div style={{ maxHeight: '300px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {selectedSession.memories.map(m => (
@@ -174,7 +175,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ onInspectMemory }) => {
         )}
 
         <Card>
-          <CardHeader><CardTitle>Consolidation History</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t('history.consolidationHistory')}</CardTitle></CardHeader>
           <CardContent>
             <div style={{ maxHeight: '400px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {consolidations.length > 0 ? (
@@ -194,7 +195,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ onInspectMemory }) => {
                   </div>
                 ))
               ) : (
-                <div style={{ textAlign: 'center', color: MG(0.35), fontSize: '12px', padding: '20px' }}>No consolidation summaries generated yet.</div>
+                <div style={{ textAlign: 'center', color: MG(0.35), fontSize: '12px', padding: '20px' }}>{t('history.noConsolidations')}</div>
               )}
             </div>
           </CardContent>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, Button, Input, Select, SelectOption } from '@hermes/sdk';
 import { formatDateLabel, safeNumber, shortId } from '../utils/format';
+import { t } from '../utils/i18n';
 
 const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
@@ -141,58 +142,58 @@ export const MemoriesTab: React.FC<MemoriesTabProps> = ({ onInspectMemory, onIns
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <Input
-                  placeholder="Search memories..."
+                  placeholder={t('memories.searchPlaceholder')}
                   value={filters.q || ''}
                   onChange={(e: any) => handleFilterChange('q', e.target.value)}
                   style={{ flex: 1 }}
                 />
-                <Button onClick={loadMemories} ghost>Refresh</Button>
-                <Button onClick={handleClearFilters} ghost>Clear</Button>
+                <Button onClick={loadMemories} ghost>{t('memories.refresh')}</Button>
+                <Button onClick={handleClearFilters} ghost>{t('memories.clear')}</Button>
               </div>
 
               {/* Advanced filter dropdowns */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>Kind</span>
+                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>{t('memories.kind')}</span>
                   <Select value={filters.kind || 'all'} onValueChange={(val: string) => handleFilterChange('kind', val)}>
-                    <SelectOption value="all">All Tiers</SelectOption>
-                    <SelectOption value="working">Working</SelectOption>
-                    <SelectOption value="episodic">Episodic</SelectOption>
+                    <SelectOption value="all">{t('memories.allTiers')}</SelectOption>
+                    <SelectOption value="working">{t('memories.working')}</SelectOption>
+                    <SelectOption value="episodic">{t('memories.episodic')}</SelectOption>
                   </Select>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>Status</span>
+                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>{t('memories.status')}</span>
                   <Select value={filters.status || 'active'} onValueChange={(val: string) => handleFilterChange('status', val)}>
-                    <SelectOption value="active">Active Only</SelectOption>
-                    <SelectOption value="expired">Expired Only</SelectOption>
-                    <SelectOption value="all">All Statuses</SelectOption>
+                    <SelectOption value="active">{t('memories.activeOnly')}</SelectOption>
+                    <SelectOption value="expired">{t('memories.expiredOnly')}</SelectOption>
+                    <SelectOption value="all">{t('memories.allStatuses')}</SelectOption>
                   </Select>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>Sort</span>
+                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>{t('memories.sort')}</span>
                   <Select value={filters.sort || 'recent'} onValueChange={(val: string) => handleFilterChange('sort', val)}>
-                    <SelectOption value="recent">Recent</SelectOption>
-                    <SelectOption value="importance">Importance</SelectOption>
-                    <SelectOption value="oldest">Oldest</SelectOption>
+                    <SelectOption value="recent">{t('memories.recent')}</SelectOption>
+                    <SelectOption value="importance">{t('memories.importance')}</SelectOption>
+                    <SelectOption value="oldest">{t('memories.oldest')}</SelectOption>
                   </Select>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>Trust Preset</span>
+                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>{t('memories.trustPreset')}</span>
                   <Select value={filters.trust_preset || ''} onValueChange={(val: string) => handleFilterChange('trust_preset', val)}>
-                    <SelectOption value="">All confidence</SelectOption>
-                    <SelectOption value="contaminated">needs review</SelectOption>
-                    <SelectOption value="degraded">degraded only</SelectOption>
-                    <SelectOption value="due">due for degradation</SelectOption>
+                    <SelectOption value="">{t('memories.allConfidence')}</SelectOption>
+                    <SelectOption value="contaminated">{t('memories.contaminated')}</SelectOption>
+                    <SelectOption value="degraded">{t('memories.degradedOnly')}</SelectOption>
+                    <SelectOption value="due">{t('memories.due')}</SelectOption>
                   </Select>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>Veracity</span>
+                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>{t('memories.veracity')}</span>
                   <Select value={filters.veracity || ''} onValueChange={(val: string) => handleFilterChange('veracity', val)}>
-                    <SelectOption value="">All trust</SelectOption>
+                    <SelectOption value="">{t('memories.allTrust')}</SelectOption>
                     <SelectOption value="stated">stated</SelectOption>
                     <SelectOption value="inferred">inferred</SelectOption>
                     <SelectOption value="tool">tool</SelectOption>
@@ -205,9 +206,9 @@ export const MemoriesTab: React.FC<MemoriesTabProps> = ({ onInspectMemory, onIns
               {/* Dynamic list selects (Source, Scope, Session) */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>Source</span>
+                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>{t('memories.source')}</span>
                   <Select value={filters.source || ''} onValueChange={(val: string) => handleFilterChange('source', val)}>
-                    <SelectOption value="">All Sources</SelectOption>
+                    <SelectOption value="">{t('memories.allSources')}</SelectOption>
                     {(statsData?.by_source || []).map(s => (
                       <SelectOption key={s.source} value={s.source}>{s.source || 'unknown'}</SelectOption>
                     ))}
@@ -215,9 +216,9 @@ export const MemoriesTab: React.FC<MemoriesTabProps> = ({ onInspectMemory, onIns
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>Scope</span>
+                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>{t('memories.scope')}</span>
                   <Select value={filters.scope || ''} onValueChange={(val: string) => handleFilterChange('scope', val)}>
-                    <SelectOption value="">All Scopes</SelectOption>
+                    <SelectOption value="">{t('memories.allScopes')}</SelectOption>
                     {(statsData?.by_scope || []).map(s => (
                       <SelectOption key={s.scope} value={s.scope}>{s.scope || 'unknown'}</SelectOption>
                     ))}
@@ -225,9 +226,9 @@ export const MemoriesTab: React.FC<MemoriesTabProps> = ({ onInspectMemory, onIns
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>Session</span>
+                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>{t('memories.session')}</span>
                   <Select value={filters.session_id || ''} onValueChange={(val: string) => handleFilterChange('session_id', val)}>
-                    <SelectOption value="">All Sessions</SelectOption>
+                    <SelectOption value="">{t('memories.allSessions')}</SelectOption>
                     {(statsData?.by_session || []).map(s => (
                       <SelectOption key={s.session_id} value={s.session_id}>{shortId(s.session_id)}</SelectOption>
                     ))}
@@ -241,7 +242,7 @@ export const MemoriesTab: React.FC<MemoriesTabProps> = ({ onInspectMemory, onIns
         {/* Memory list */}
         <div style={{ maxHeight: '600px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: MG(0.4) }}>Loading memory list...</div>
+            <div style={{ textAlign: 'center', padding: '40px', color: MG(0.4) }}>{t('memories.loadingList')}</div>
           ) : memories.length > 0 ? (
             memories.map(m => (
               <div
@@ -251,7 +252,7 @@ export const MemoriesTab: React.FC<MemoriesTabProps> = ({ onInspectMemory, onIns
                   padding: '10px 12px', borderRadius: '4px', cursor: 'pointer',
                   background: selected?.id === m.id ? MG(0.08) : MG(0.03),
                   border: `1px solid ${selected?.id === m.id ? MG(0.2) : MG(0.07)}`,
-                  transition: 'background 0.1s',
+                  transition: 'background 0.15s',
                 }}
                 onMouseEnter={e => { if (selected?.id !== m.id) e.currentTarget.style.background = MG(0.06); }}
                 onMouseLeave={e => { if (selected?.id !== m.id) e.currentTarget.style.background = MG(0.03); }}
@@ -273,7 +274,7 @@ export const MemoriesTab: React.FC<MemoriesTabProps> = ({ onInspectMemory, onIns
               </div>
             ))
           ) : (
-            <div style={{ textAlign: 'center', padding: '40px', color: MG(0.35), fontSize: '13px' }}>No memories matching filters.</div>
+            <div style={{ textAlign: 'center', padding: '40px', color: MG(0.35), fontSize: '13px' }}>{t('memories.noMatching')}</div>
           )}
         </div>
       </div>
@@ -281,13 +282,13 @@ export const MemoriesTab: React.FC<MemoriesTabProps> = ({ onInspectMemory, onIns
       {/* Right Panel: Detail Inspector */}
       <Card style={{ alignSelf: 'stretch', minHeight: '300px' }}>
         <CardHeader>
-          <CardTitle>Memory Inspector</CardTitle>
+          <CardTitle>{t('memories.inspector')}</CardTitle>
         </CardHeader>
         <CardContent>
           {selected ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
-                <span style={{ fontSize: '10px', color: MG(0.4), textTransform: 'uppercase' }}>Memory content</span>
+                <span style={{ fontSize: '10px', color: MG(0.4), textTransform: 'uppercase' }}>{t('memories.contentLabel')}</span>
                 <div style={{
                   padding: '10px', background: MG(0.03), border: `1px solid ${MG(0.07)}`,
                   borderRadius: '4px', fontSize: '13px', lineHeight: '1.5', whiteSpace: 'pre-wrap', marginTop: '4px',
@@ -295,15 +296,15 @@ export const MemoriesTab: React.FC<MemoriesTabProps> = ({ onInspectMemory, onIns
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}>
-                <div>ID: <span style={{ fontFamily: 'var(--theme-font-mono)', color: MG(0.5) }}>{selected.id.slice(0, 8)}</span></div>
-                <div>Status: <strong>{selected.status}</strong></div>
-                <div>Veracity: <strong>{selected.veracity}</strong></div>
-                <div>Importance: <strong>{safeNumber(selected.importance, 2)}</strong></div>
-                <div>Source: <strong>{selected.source || 'unknown'}</strong></div>
-                <div>Scope: <strong>{selected.scope || 'session'}</strong></div>
+                <div>{t('common.id')}: <span style={{ fontFamily: 'var(--theme-font-mono)', color: MG(0.5) }}>{selected.id.slice(0, 8)}</span></div>
+                <div>{t('common.status')}: <strong>{selected.status}</strong></div>
+                <div>{t('common.veracity')}: <strong>{selected.veracity}</strong></div>
+                <div>{t('common.importance')}: <strong>{safeNumber(selected.importance, 2)}</strong></div>
+                <div>{t('common.source')}: <strong>{selected.source || 'unknown'}</strong></div>
+                <div>{t('common.scope')}: <strong>{selected.scope || 'session'}</strong></div>
                 {selected.session_id && (
                   <div style={{ gridColumn: 'span 2' }}>
-                    Session:{' '}
+                    {t('common.session')}:{' '}
                     <span
                       onClick={() => onInspectSession(selected.session_id!)}
                       style={{ textDecoration: 'underline', cursor: 'pointer', color: MG(0.7), fontFamily: 'var(--theme-font-mono)' }}
@@ -312,34 +313,34 @@ export const MemoriesTab: React.FC<MemoriesTabProps> = ({ onInspectMemory, onIns
                     </span>
                   </div>
                 )}
-                <div style={{ gridColumn: 'span 2' }}>Created: <span>{formatDateLabel(selected.created_at)}</span></div>
-                {selected.valid_until && <div style={{ gridColumn: 'span 2' }}>Expires: <span>{formatDateLabel(selected.valid_until)}</span></div>}
+                <div style={{ gridColumn: 'span 2' }}>{t('memories.createdLabel')}: <span>{formatDateLabel(selected.created_at)}</span></div>
+                {selected.valid_until && <div style={{ gridColumn: 'span 2' }}>{t('memories.expiresLabel')}: <span>{formatDateLabel(selected.valid_until)}</span></div>}
               </div>
 
               <div style={{ display: 'flex', gap: '6px' }}>
-                <Button onClick={() => onInspectMemory(selected)} primary>View Details</Button>
+                <Button onClick={() => onInspectMemory(selected)} primary>{t('memories.viewDetails')}</Button>
               </div>
 
               {/* Maintenance tools (Admin only) */}
               {adminMode && (
                 <div style={{ borderTop: `1px solid ${MG(0.1)}`, paddingTop: '12px', marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <div style={{ fontSize: '11px', textTransform: 'uppercase', color: MG(0.45) }}>Admin Actions</div>
+                  <div style={{ fontSize: '11px', textTransform: 'uppercase', color: MG(0.45) }}>{t('memories.adminActions')}</div>
 
                   {/* Supersede */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <Input
-                      placeholder="Replacement text content..."
+                      placeholder={t('memories.supersedePlaceholder')}
                       value={supersedeText}
                       onChange={(e: any) => setSupersedeText(e.target.value)}
                     />
-                    <Button onClick={() => handleSupersede(selected.id)} disabled={submitting || !supersedeText.trim()} primary>Supersede (Replace)</Button>
+                    <Button onClick={() => handleSupersede(selected.id)} disabled={submitting || !supersedeText.trim()} primary>{t('memories.supersedeBtn')}</Button>
                   </div>
 
-                  {/* Trust */}
+                  {/* Adjust Veracity / Trust */}
                   <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                     <div style={{ flex: 1 }}>
                       <Select value="" onValueChange={(val: string) => val && handleSetVeracity(selected.id, val)} disabled={submitting}>
-                        <SelectOption value="">Adjust Veracity/Trust</SelectOption>
+                        <SelectOption value="">{t('memories.adjustVeracity')}</SelectOption>
                         <SelectOption value="stated">stated</SelectOption>
                         <SelectOption value="inferred">inferred</SelectOption>
                         <SelectOption value="tool">tool</SelectOption>
@@ -357,16 +358,16 @@ export const MemoriesTab: React.FC<MemoriesTabProps> = ({ onInspectMemory, onIns
                       onChange={(e: any) => setExpiryDate(e.target.value)}
                       style={{ flex: 1, height: '36px' }}
                     />
-                    <Button onClick={() => handleSetExpiry(selected.id)} disabled={submitting} ghost>Set Expiry</Button>
+                    <Button onClick={() => handleSetExpiry(selected.id)} disabled={submitting} ghost>{t('memories.setExpiry')}</Button>
                   </div>
 
                   {/* Invalidate */}
-                  <Button onClick={() => handleInvalidate(selected.id)} disabled={submitting} style={{ background: '#ef4444', color: '#fff', marginTop: '4px' }}>Expire (Invalidate)</Button>
+                  <Button onClick={() => handleInvalidate(selected.id)} disabled={submitting} style={{ background: '#ef4444', color: '#fff', marginTop: '4px' }}>{t('memories.invalidateBtn')}</Button>
                 </div>
               )}
             </div>
           ) : (
-            <div style={{ color: MG(0.4), fontSize: '13px', textAlign: 'center', padding: '40px' }}>Select a memory from the list to inspect.</div>
+            <div style={{ color: MG(0.4), fontSize: '13px', textAlign: 'center', padding: '40px' }}>{t('memories.selectPrompt')}</div>
           )}
         </CardContent>
       </Card>
