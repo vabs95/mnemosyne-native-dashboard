@@ -44,6 +44,15 @@ export const TodayTab: React.FC = () => {
 
   const resetToday = () => setDate(new Date().toISOString().split('T')[0]);
 
+  const breakdownsList: Array<[string, Array<{ label: string; count: number }> | undefined]> = digest?.breakdowns
+    ? [
+        ['Sources', digest.breakdowns.sources],
+        ['Sessions', digest.breakdowns.sessions],
+        ['Veracity', digest.breakdowns.veracity],
+        ['Entities', digest.breakdowns.entities],
+      ]
+    : [];
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Header */}
@@ -129,13 +138,8 @@ export const TodayTab: React.FC = () => {
               <CardHeader><CardTitle>Breakdowns</CardTitle></CardHeader>
               <CardContent>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '16px' }}>
-                  {[
-                    ['Sources', digest.breakdowns.sources],
-                    ['Sessions', digest.breakdowns.sessions],
-                    ['Veracity', digest.breakdowns.veracity],
-                    ['Entities', digest.breakdowns.entities],
-                  ].map(([label, rows]) => (
-                    <div key={label as string}>
+                  {breakdownsList.map(([label, rows]) => (
+                    <div key={label}>
                       <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: MG(0.4), marginBottom: '8px' }}>{label}</div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         {(rows || []).slice(0, 6).map((row: any) => (
