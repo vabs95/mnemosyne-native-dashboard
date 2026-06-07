@@ -1,16 +1,16 @@
-import React from 'react';
-
 declare global {
   interface Window {
     __HERMES_PLUGINS__: {
-      register: (name: string, component: React.ComponentType<any>) => void;
-      registerSlot: (slot: string, name: string, component: React.ComponentType<any>) => void;
+      register: (name: string, component: import('react').ComponentType<any>) => void;
+      registerSlot: (slot: string, name: string, component: import('react').ComponentType<any>) => void;
     };
     __HERMES_PLUGIN_SDK__: any;
   }
 }
 
 declare module '@hermes/sdk' {
+  import React from 'react';
+
   export const api: any;
   export const fetchJSON: (url: string, options?: any) => Promise<any>;
   export const authedFetch: (url: string, options?: any) => Promise<Response>;

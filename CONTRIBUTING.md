@@ -23,6 +23,7 @@ python -m compileall -q .
 cd web
 npm ci
 npm run build
+npm run typecheck
 ```
 
 ## Safety invariants
@@ -43,5 +44,6 @@ different security model:
 - [ ] Pytest passes.
 - [ ] Python compile check passes.
 - [ ] `cd web && npm run build` passes.
+- [ ] `cd web && npm run typecheck` passes.
 - [ ] README/config docs updated for user-facing changes.
 - [ ] Security notes updated if the network/auth/read-only model changes.

@@ -11,6 +11,7 @@ Describe the change.
 - [ ] `python -m pytest -q`
 - [ ] `python -m compileall -q .`
 - [ ] `cd web && npm run build`
+- [ ] `cd web && npm run typecheck`
 
 ## Safety
 
