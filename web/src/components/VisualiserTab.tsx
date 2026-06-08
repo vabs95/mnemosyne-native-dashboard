@@ -4,26 +4,10 @@
  * Three.js is NOT bundled. It is loaded on demand from the platform vendor
  * file (/static/vendor/three.module.min.js) the first time this tab is opened,
  * via threeLoader.ts. All subsequent visits reuse the browser-cached copy.
- *
- * Features (all preserved from the 2D canvas version):
- *   - Constellation mode  (wide orbital layout, dashed edges, star palette)
- *   - Neural map mode     (clustered layout, curved synapses, green-red palette)
- *   - Auto-rotation / drift, pauseable
- *   - Mouse/touch rotate + pan + pinch-zoom
- *   - Scroll-wheel zoom
- *   - Node hover & click → inspector panel
- *   - Fullscreen toggle
- *   - Camera-mode toggle (rotate ↔ pan)
- *   - Reset view
- *   - Cluster / region ellipsoids (neural mode)
- *   - Background star field (shader-based points)
- *   - Label sprites (canvas-texture billboards)
- *   - Selection / hover ring highlight
- *   - Cluster badge row at bottom
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import type * as THREEns from 'three'; // type-only — zero runtime bytes
+import type * as THREEns from 'three';
 import { fetchJSON, Button, Badge, Card, CardHeader, CardTitle, CardContent } from '@hermes/sdk';
 import { safeNumber } from '../utils/format';
 import { t } from '../utils/i18n';
@@ -33,19 +17,13 @@ import { getThree, type ThreeModule } from '../utils/threeLoader';
 
 const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
+
 const VERACITY_COLOR: Record<string, string> = {
   stated: '#065f46',
   inferred: '#1e3a8a',
   tool: '#581c87',
   imported: '#78350f',
 };
-const MIN_ZOOM = 0.45;
-const MAX_ZOOM = 4.0;
-const FOV_CONST  = 52;
-const FOV_NEURAL = 46;
-const WORLD_CONST   = 340;
-const CAMERA_Z_CONST  = 820;
-const CAMERA_Z_NEURAL = 660;
 
 /* ─────────────────────────────── types ─────────────────────────── */
 
@@ -65,62 +43,100 @@ interface SceneNode {
   count?: number;
   memory_id?: string;
   preview?: string;
-  wx: number;
-  wy: number;
-  wz: number;
-  radius: number;
+  x: number;
+  y: number;
+  z: number;
+  size: number;
   twinkle: number;
   twinkleFreq: number;
   twinkleAmp: number;
-}
-
-interface SceneEdge {
-  id: string;
-  source: string;
-  target: string;
-  kind?: string;
-}
-
-interface Region {
-  label: string;
-  angle: number;
-  cx: number; cy: number; cz: number;
-  spread: number;
-}
-
-interface Palette {
-  bg: string;
-  bgHex: number;
-  coreHex: number;
-  starHex: number;
-  memoryHex: number;
-  starStr: string;
-  memoryStr: string;
-  edgeHex: number;
-  edgeMemoryHex: number;
-  text: string;
+  _degree?: number;
+  _weight?: number;
+  neuralRegion?: string;
 }
 
 /* ─────────────────────────────── helpers ─────────────────────────── */
 
-const PALETTES: Record<VisualiserMode, Palette> = {
-  constellation: {
-    bg: '#050711',   bgHex: 0x050711,
-    coreHex: 0x65d6ff,
-    starHex: 0x65d6ff, starStr: '#65d6ff',
-    memoryHex: 0xffe08a, memoryStr: '#ffe08a',
-    edgeHex: 0xc6e0ff, edgeMemoryHex: 0xffe08a,
-    text: '#f7f8ff',
-  },
-  neural: {
-    bg: '#06100f',   bgHex: 0x06100f,
-    coreHex: 0x22826f,
-    starHex: 0x66e8c6, starStr: '#66e8c6',
-    memoryHex: 0xff5f57, memoryStr: '#ff5f57',
-    edgeHex: 0x52d6b5, edgeMemoryHex: 0xff5f57,
-    text: '#f6fbf7',
-  },
+const esc = (s: any) => String(s || '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#039;');
+
+const cssHexToInt = (hex: string) => {
+  const m = String(hex || '').match(/^#([0-9a-f]{6})$/i);
+  return m ? parseInt(m[1], 16) : 0xffffff;
 };
+
+const constellationColors = (isLight: boolean) => {
+  return isLight ? {
+    light: true,
+    bg: '#fbf8f3',
+    nebula: 'rgba(101,214,255,.11)',
+    star: '#087fa6',
+    memory: '#c9a96e',
+    text: '#2b2927',
+    muted: 'rgba(66,58,52,.62)',
+    edge: 'rgba(25,65,108,.50)',
+    memoryEdge: 'rgba(130,78,18,.48)'
+  } : {
+    light: false,
+    bg: '#050711',
+    nebula: 'rgba(101,214,255,.14)',
+    star: '#65d6ff',
+    memory: '#ffe08a',
+    text: '#f7f8ff',
+    muted: 'rgba(213,219,239,.64)',
+    edge: 'rgba(198,224,255,.44)',
+    memoryEdge: 'rgba(255,224,138,.50)'
+  };
+};
+
+const neuralColors = (isLight: boolean) => {
+  return isLight ? {
+    light: true,
+    bg: '#f7f0e7',
+    core: 'rgba(24,128,107,.18)',
+    mid: 'rgba(185,54,46,.12)',
+    star: '#087f73',
+    memory: '#c63e35',
+    text: '#252220',
+    synapse: 'rgba(18,116,100,.34)',
+    synapseHot: 'rgba(8,126,106,.62)',
+    memorySynapse: 'rgba(190,54,46,.58)'
+  } : {
+    light: false,
+    bg: '#06100f',
+    core: 'rgba(34,130,111,.28)',
+    mid: 'rgba(95,31,29,.40)',
+    star: '#66e8c6',
+    memory: '#ff5f57',
+    text: '#f6fbf7',
+    synapse: 'rgba(82,214,181,.22)',
+    synapseHot: 'rgba(90,238,196,.52)',
+    memorySynapse: 'rgba(255,95,87,.58)'
+  };
+};
+
+function getThemeColors(mode: VisualiserMode, isLight: boolean) {
+  const c = mode === 'neural' ? neuralColors(isLight) : constellationColors(isLight);
+  const linkStr = mode === 'neural'
+    ? (isLight ? '#127464' : '#52d6b5')
+    : (isLight ? '#19416c' : '#c6e0ff');
+  const pulseStr = mode === 'neural'
+    ? (isLight ? '#6f6048' : '#fffaf0')
+    : (c as any).memory;
+  return {
+    bg: c.bg,
+    star: c.star,
+    memory: (c as any).memory,
+    link: linkStr,
+    pulse: pulseStr,
+    text: c.text,
+    light: isLight
+  };
+}
 
 const shortLabel = (s: string, max = 22) =>
   s.length > max ? `${s.slice(0, max - 3)}...` : s;
@@ -133,192 +149,491 @@ const labelForDisplay = (raw: string) => {
     : label;
 };
 
-const isTechnical = (raw: string) => {
-  const alpha = (raw.match(/[A-Za-z]/g) || []).length;
-  return /^[a-f0-9]{10,}$/i.test(raw) || /^mem\s+[a-f0-9]{6,}$/i.test(raw) || alpha < 4;
-};
+/* ─────────────────────────────── layout builder ─────────────────────────── */
 
-/* ─────────────────────── layout builder ─────────────────────── */
+function buildThreePositions(data: any) {
+  const nodes = (data.nodes || []).slice(0, 160).map((n: any) => ({ ...n }));
+  const categories = [...new Set(nodes.map((n: any) => n.category || 'Other'))];
+  const catIndex = Object.fromEntries(categories.map((c, i) => [c, i]));
+  nodes.forEach((n: any, i: number) => {
+    const cat = n.category || 'Other';
+    const ci = catIndex[cat] || 0;
+    const weight = Math.max(1, Number(n.weight || n.count || 1));
+    const shell = n.kind === 'memory' ? 1.12 : 0.74 + (ci % 3) * 0.10;
+    const radius = 285 * shell + (i % 7) * 18 + Math.min(46, Math.sqrt(weight) * 5.5);
+    const longitude = ((i * 137.508 + ci * 23) % 360) * Math.PI / 180;
+    const latitudeSeed = (((i * 53 + ci * 29) % 101) + 0.5) / 101;
+    const latitude = Math.acos(1 - 2 * latitudeSeed) - Math.PI / 2;
+    const radial = Math.cos(latitude);
+    const orbitBias = Math.sin((i / Math.max(nodes.length, 1)) * Math.PI * 2 + ci * 0.62) * 22;
+    n.x = Math.cos(longitude) * radial * radius;
+    n.y = Math.sin(latitude) * radius * 0.92 + orbitBias;
+    n.z = Math.sin(longitude) * radial * radius * 1.12 + Math.cos(longitude * 1.7 + ci) * 54;
+    const sizeJitter = 1 + (((i * 37) % 11) - 5) * 0.035;
+    n.size = Math.min(42, 9 + Math.sqrt(weight) * 6.2 + (n.kind === 'memory' ? 3.5 : 4.5)) * sizeJitter;
+    n.twinkle = (i % 23) / 23;
+    const twinkleTier = i % 17 === 0 ? 2 : (i % 5 === 0 ? 1 : 0);
+    n.twinkleFreq = twinkleTier === 2 ? 0.0048 + ((i * 41) % 130) / 100000 : (twinkleTier === 1 ? 0.0024 + ((i * 47) % 120) / 100000 : 0.00125 + ((i * 53) % 110) / 100000);
+    n.twinkleAmp = twinkleTier === 2 ? 0.34 : (twinkleTier === 1 ? 0.24 : 0.15 + ((i * 29) % 70) / 1000);
+    n._degree = 0;
+    n._weight = weight;
+  });
+  return nodes;
+}
 
-function buildSceneData(payload: any, mode: VisualiserMode) {
-  const maxNodes = mode === 'neural' ? 170 : 160;
-  const maxEdges = mode === 'neural' ? 340 : 300;
-
-  const rawNodes: any[] = (payload?.nodes || []).slice(0, maxNodes);
-  const nodeIds = new Set(rawNodes.map((n: any) => n.id));
-  const rawEdges: any[] = (payload?.edges || [])
-    .filter((e: any) => nodeIds.has(e.source) && nodeIds.has(e.target))
-    .slice(0, maxEdges);
-
-  const categories: string[] = [...new Set(rawNodes.map((n: any) => String(n.category || 'Other')))];
-  const catIndex: Record<string, number> = Object.fromEntries(categories.map((c, i) => [c, i]));
-
+function buildThreeNeuralPositions(data: any, vis: any) {
+  const nodes = (data.nodes || []).slice(0, 170).map((n: any) => ({ ...n }));
+  const nodeIds = new Set(nodes.map((n: any) => n.id));
+  const edges = (data.edges || []).filter((e: any) => nodeIds.has(e.source) && nodeIds.has(e.target)).slice(0, 340);
+  const categories = [...new Set(nodes.map((n: any) => n.category || 'Other'))];
+  const catIndex = Object.fromEntries(categories.map((c, i) => [c, i]));
+  const regionCount = Math.max(1, categories.length);
+  const regions = Object.fromEntries(categories.map((cat, i) => {
+    const angle = -Math.PI / 2 + (i / regionCount) * Math.PI * 2;
+    const radius = regionCount <= 2 ? 86 : (i === regionCount - 1 && regionCount > 5 ? 70 : 142 + (i % 2) * 18);
+    const lap = Math.floor(i / Math.max(1, regionCount));
+    return [cat, {
+      label: cat,
+      angle,
+      cx: Math.cos(angle) * radius + lap * 18,
+      cy: Math.sin(angle) * radius * 0.96,
+      cz: ((i * 41) % 89 - 44) * 0.72,
+      spread: 94 + (i % 4) * 10
+    }];
+  }));
   const degree = new Map<string, number>();
-  rawEdges.forEach((e: any) => {
+  edges.forEach((e: any) => {
     degree.set(e.source, (degree.get(e.source) || 0) + 1);
     degree.set(e.target, (degree.get(e.target) || 0) + 1);
   });
-
-  const regions: Region[] = categories.map((cat, idx) => {
-    const tPos = categories.length === 1 ? 0 : (idx / Math.max(1, categories.length - 1)) * 2 - 1;
-    const angle = -Math.PI / 2 + idx * 2.399963;
-    const radial = Math.sqrt(Math.max(0, 1 - tPos * tPos));
-    return {
-      label: cat, angle,
-      cx: Math.cos(angle) * radial * 230,
-      cy: tPos * 150 + Math.sin(angle * 0.7) * 24,
-      cz: Math.sin(angle) * radial * 190 + (idx % 2 === 0 ? -28 : 28),
-      spread: 78 + (idx % 4) * 12,
-    };
+  const hubsByCategory: Record<string, any[]> = {};
+  nodes.filter((n: any) => n.kind !== 'memory').sort((a: any, b: any) => (Number(b.weight || b.count || 0) + (degree.get(b.id) || 0)) - (Number(a.weight || a.count || 0) + (degree.get(a.id) || 0))).forEach((n: any) => {
+    const cat = n.category || 'Other';
+    if (!hubsByCategory[cat]) hubsByCategory[cat] = [];
+    hubsByCategory[cat].push(n);
   });
-  const regionByCategory: Record<string, Region> = Object.fromEntries(regions.map(r => [r.label, r]));
-
-  const nodes: SceneNode[] = rawNodes.map((node: any, idx: number) => {
-    const cat = String(node.category || 'Other');
-    const ci  = Number(catIndex[cat] || 0);
-    const weight = Math.max(1, Number(node.weight || node.count || 1));
-    let wx = 0, wy = 0, wz = 0;
-
-    if (mode === 'neural') {
-      const region = regionByCategory[cat] || regions[0] || { cx: 0, cy: 0, cz: 0, angle: 0 };
-      const orbit = node.kind === 'memory'
-        ? 70 + (idx % 6) * 15 + Math.min(42, Math.sqrt(weight) * 9)
-        : (idx % 9) * 20;
-      const angle = (region as Region).angle + idx * 2.399963 + ci * 0.18;
-      const yUnit = ((((idx * 43 + ci * 17) % 97) + 0.5) / 97) * 2 - 1;
+  const byId = Object.fromEntries(nodes.map((n: any) => [n.id, n]));
+  nodes.forEach((n: any, i: number) => {
+    const cat = n.category || 'Other';
+    const region = regions[cat] || regions.Other || { cx: 0, cy: 0, cz: 0, angle: 0, spread: 80 };
+    const ci = catIndex[cat] || 0;
+    const weight = Math.max(1, Number(n.weight || n.count || 1));
+    const d = degree.get(n.id) || 0;
+    if (n.kind === 'memory') {
+      const linked = edges.find((e: any) => e.source === n.id || e.target === n.id);
+      const parent = linked ? byId[linked.source === n.id ? linked.target : linked.source] : null;
+      const parentX = parent && parent.kind !== 'memory' && Number.isFinite(parent.x) ? parent.x : region.cx;
+      const parentY = parent && parent.kind !== 'memory' && Number.isFinite(parent.y) ? parent.y : region.cy;
+      const parentZ = parent && parent.kind !== 'memory' && Number.isFinite(parent.z) ? parent.z : region.cz;
+      const branch = ((i * 137.508 + ci * 19) % 360) * Math.PI / 180;
+      const yUnit = ((((i * 43 + ci * 17) % 97) + 0.5) / 97) * 2 - 1;
       const radial = Math.sqrt(Math.max(0, 1 - yUnit * yUnit));
-      wx = region.cx + Math.cos(angle) * radial * orbit;
-      wy = region.cy + yUnit * orbit * 0.82;
-      wz = region.cz + Math.sin(angle) * radial * orbit * 0.86;
+      const dist = 46 + (i % 6) * 13 + Math.min(48, Math.sqrt(weight) * 10);
+      n.x = parentX + Math.cos(branch) * radial * dist;
+      n.y = parentY + yUnit * dist * 0.82;
+      n.z = parentZ + Math.sin(branch) * radial * dist * 0.86;
     } else {
-      const angle = (idx / Math.max(rawNodes.length, 1)) * Math.PI * 2 + ci * 0.62;
-      const band  = node.kind === 'memory' ? 1.28 : 0.72 + (ci % 4) * 0.16;
-      const radius = WORLD_CONST * band + (idx % 7) * 16;
-      wx = Math.cos(angle) * radius;
-      wy = Math.sin(angle * 1.23) * (100 + (ci % 5) * 24) + (((idx * 53) % 131) - 65) * 0.82;
-      wz = Math.sin(angle) * radius * 0.82 + (((idx * 97) % 181) - 90) * 1.55 + ((ci % 5) - 2) * 42;
+      const rank = Math.max(0, (hubsByCategory[cat] || []).indexOf(n));
+      const orbit = rank === 0 ? 0 : 30 + Math.sqrt(rank) * 20;
+      const angle = region.angle + rank * 2.399963 + (ci % 3) * 0.24;
+      const yUnit = rank === 0 ? 0 : ((((rank * 37 + ci * 11) % 89) + 0.5) / 89) * 2 - 1;
+      const radial = Math.sqrt(Math.max(0, 1 - yUnit * yUnit));
+      n.x = region.cx + Math.cos(angle) * radial * orbit;
+      n.y = region.cy + yUnit * orbit * 0.86;
+      n.z = region.cz + Math.sin(angle) * radial * orbit * 0.80;
     }
-
-    const deg = degree.get(node.id) || 0;
-    const nodeRadius = Math.min(
-      mode === 'neural' ? 30 : 22,
-      (mode === 'neural' ? 8 : 4) + Math.sqrt(weight + deg) * (node.kind === 'memory' ? 3.2 : 4.1),
-    ) * (mode === 'neural' ? 0.8 : 0.54);
-
-    return {
-      ...node, wx, wy, wz,
-      radius: Math.max(4, nodeRadius),
-      twinkle: (idx % 17) / 17,
-      twinkleFreq: (mode === 'neural' ? 0.0017 : 0.00115) + ((idx * 31) % 90) / 100000,
-      twinkleAmp: 0.075 + ((idx * 19) % 55) / 1000,
-    };
+    n.size = Math.min(30, 8 + Math.sqrt(weight + d) * (n.kind === 'memory' ? 3.2 : 4.1));
+    n._degree = d;
+    n._weight = weight;
+    n.neuralRegion = cat;
   });
-
-  const edges: SceneEdge[] = rawEdges.map((e: any) => ({
-    id: String(e.id || `${e.source}-${e.target}`),
-    source: e.source, target: e.target, kind: e.kind,
-  }));
-
-  const starCount = mode === 'neural' ? 80 : 160;
-  const spread    = 1800;
-  const stars = Array.from({ length: starCount }, (_, idx) => ({
-    x: ((idx * 73)  % 1000) / 1000 * spread - spread / 2,
-    y: ((idx * 191) % 680)  / 680  * spread - spread / 2,
-    z: ((idx * 137) % 1000) / 1000 * spread - spread / 2,
-    r: 0.8 + ((idx * 37) % 100) / 50,
-    a: 0.12 + ((idx * 29) % 100) / (mode === 'neural' ? 340 : 240),
-    phase: ((idx * 47) % 628) / 100,
-    freq:  (idx % 13 === 0 ? 0.0058 : 0.00048) + ((idx * 41) % 95) / 100000,
-  }));
-
-  return { nodes, edges, regions, stars };
+  vis.neuralRegions = Object.values(regions);
+  return nodes;
 }
 
-/* ─────────── canvas-texture helpers (label + glow) ─────────── */
-
-const _texCache = new Map<string, THREEns.CanvasTexture>();
-
-function makeGlowTexture(THREE: ThreeModule, color: string, isMemory: boolean): THREEns.CanvasTexture {
-  const key = `glow:${color}:${isMemory}`;
-  if (_texCache.has(key)) return _texCache.get(key)!;
-  const size = 128;
-  const cvs  = document.createElement('canvas');
-  cvs.width = cvs.height = size;
-  const ctx = cvs.getContext('2d')!;
-  const g   = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  g.addColorStop(0,    'rgba(255,255,255,1)');
-  g.addColorStop(0.18, color);
-  g.addColorStop(0.55, isMemory ? 'rgba(255,180,80,0.35)' : 'rgba(100,200,255,0.2)');
-  g.addColorStop(1,    'rgba(0,0,0,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, size, size);
-  const tex = new THREE.CanvasTexture(cvs);
-  tex.needsUpdate = true;
-  _texCache.set(key, tex as any);
-  return tex as any;
+function limitedThreeEdges(data: any, byId: Map<string, any>, isNeural: boolean, mobile: boolean = false) {
+  const degree = new Map<string, number>();
+  const out: any[] = [];
+  const limit = isNeural ? 132 : (mobile ? 92 : 140);
+  const degreeLimit = isNeural ? 5 : (mobile ? 3 : 4);
+  for (const e of (data.edges || [])) {
+    const a = byId.get(e.source), b = byId.get(e.target);
+    if (!a || !b) continue;
+    const da = degree.get(e.source) || 0;
+    const db = degree.get(e.target) || 0;
+    if (da >= degreeLimit || db >= degreeLimit) continue;
+    degree.set(e.source, da + 1);
+    degree.set(e.target, db + 1);
+    a._degree++;
+    b._degree++;
+    out.push({ ...e, a, b });
+    if (out.length >= limit) break;
+  }
+  return out;
 }
 
-function makeLabelTexture(THREE: ThreeModule, text: string, textColor: string): THREEns.CanvasTexture {
-  const key = `label:${text}:${textColor}`;
-  if (_texCache.has(key)) return _texCache.get(key)!;
-  const cvs  = document.createElement('canvas');
-  const ctx  = cvs.getContext('2d')!;
-  const fs   = 26;
-  ctx.font   = `${fs}px system-ui, sans-serif`;
-  const w    = Math.ceil(ctx.measureText(text).width) + 24;
-  cvs.width  = w; cvs.height = fs + 16;
-  ctx.font   = `${fs}px system-ui, sans-serif`;
-  ctx.lineWidth = 6;
-  ctx.strokeStyle = 'rgba(0,0,0,0.82)';
-  ctx.fillStyle   = textColor;
-  ctx.strokeText(text, 12, fs + 2);
-  ctx.fillText(text, 12, fs + 2);
-  const tex = new THREE.CanvasTexture(cvs);
+function buildThreeLinkSegments(THREE: ThreeModule, edges: any[], isNeural: boolean) {
+  const positions: number[] = [];
+  edges.forEach((e: any, i: number) => {
+    if (isNeural) {
+      const ax = e.a.x, ay = e.a.y, az = e.a.z, bx = e.b.x, by = e.b.y, bz = e.b.z;
+      const dx = bx - ax, dy = by - ay, dz = bz - az;
+      const len = Math.max(1, Math.hypot(dx, dy, dz));
+      const bend = (i % 2 ? 1 : -1) * Math.min(58, 18 + len * 0.12);
+      const cx = (ax + bx) / 2 + (-dy / len) * bend;
+      const cy = (ay + by) / 2 + (dx / len) * bend * 0.55 + Math.sin(i * 0.71) * 18;
+      const cz = (az + bz) / 2 + Math.cos(i * 0.53) * bend * 0.72;
+      e._curve = { cx, cy, cz };
+      let px = ax, py = ay, pz = az;
+      for (let step = 1; step <= 7; step++) {
+        const tVal = step / 7;
+        const inv = 1 - tVal;
+        const x = inv * inv * ax + 2 * inv * tVal * cx + tVal * tVal * bx;
+        const y = inv * inv * ay + 2 * inv * tVal * cy + tVal * tVal * by;
+        const z = inv * inv * az + 2 * inv * tVal * cz + tVal * tVal * bz;
+        positions.push(px, py, pz, x, y, z);
+        px = x; py = y; pz = z;
+      }
+    } else {
+      positions.push(e.a.x, e.a.y, e.a.z, e.b.x, e.b.y, e.b.z);
+    }
+  });
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+  return geometry;
+}
+
+const _pointTexCache = new Map<string, THREEns.CanvasTexture>();
+
+function makePointTexture(THREE: ThreeModule, kind: 'star' | 'neuron' | 'soma' | 'orb'): THREEns.CanvasTexture {
+  const key = `${kind}`;
+  if (_pointTexCache.has(key)) return _pointTexCache.get(key)!;
+  const canvas = document.createElement('canvas');
+  canvas.width = 128; canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+  const cx = 64, cy = 64;
+  if (kind === 'star') {
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 60);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.28, 'rgba(255,255,255,.92)');
+    g.addColorStop(0.58, 'rgba(255,255,255,.38)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 60, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.72)'; ctx.lineWidth = 1.3;
+    ctx.beginPath(); ctx.moveTo(cx, 14); ctx.lineTo(cx, 114); ctx.moveTo(14, cy); ctx.lineTo(114, cy); ctx.stroke();
+  } else if (kind === 'neuron') {
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 62);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.13, 'rgba(255,255,255,.94)');
+    g.addColorStop(0.42, 'rgba(255,255,255,.28)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 61, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.70)'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2 + 0.13;
+      const len = 22 + (i % 4) * 4;
+      const fork = len * 0.62;
+      const sx = cx + Math.cos(a) * 13, sy = cy + Math.sin(a) * 13;
+      const mx = cx + Math.cos(a + 0.10 * Math.sin(i)) * fork, my = cy + Math.sin(a + 0.10 * Math.sin(i)) * fork;
+      const ex = cx + Math.cos(a) * len, ey = cy + Math.sin(a) * len;
+      ctx.lineWidth = i % 3 === 0 ? 2.25 : 1.45;
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.quadraticCurveTo(mx, my, ex, ey); ctx.stroke();
+      ctx.lineWidth = 0.9;
+      ctx.globalAlpha = 0.72;
+      ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(cx + Math.cos(a + 0.38) * len * 0.66, cy + Math.sin(a + 0.38) * len * 0.66); ctx.stroke();
+      if (i % 3 === 0) { ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(cx + Math.cos(a - 0.34) * len * 0.60, cy + Math.sin(a - 0.34) * len * 0.60); ctx.stroke(); }
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = 'rgba(255,255,255,.98)'; ctx.beginPath(); ctx.arc(cx, cy, 34, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.54)'; ctx.beginPath(); ctx.arc(cx - 8, cy - 9, 8, 0, Math.PI * 2); ctx.fill();
+  } else if (kind === 'soma') {
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 62);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.18, 'rgba(255,255,255,.96)');
+    g.addColorStop(0.42, 'rgba(255,255,255,.34)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 62, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.68)'; ctx.lineCap = 'round'; ctx.lineWidth = 1.55;
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + 0.22, len = 21 + (i % 2) * 4;
+      ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * 18, cy + Math.sin(a) * 18); ctx.lineTo(cx + Math.cos(a) * len, cy + Math.sin(a) * len); ctx.stroke();
+    }
+    ctx.lineWidth = 3.4; ctx.beginPath(); ctx.arc(cx, cy, 40, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,1)'; ctx.beginPath(); ctx.arc(cx, cy, 35, 0, Math.PI * 2); ctx.fill();
+  } else {
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 60);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.44, 'rgba(255,255,255,.82)');
+    g.addColorStop(0.78, 'rgba(255,255,255,.22)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 60, 0, Math.PI * 2); ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
   tex.needsUpdate = true;
-  _texCache.set(key, tex as any);
-  return tex as any;
+  _pointTexCache.set(key, tex);
+  return tex;
+}
+
+function addPoints(THREE: ThreeModule, vis: any, scene: THREEns.Scene | THREEns.Group, nodes: any[], kind: string, color: string, size: number) {
+  const selected = nodes.filter((n: any) => (n.kind === 'memory') === (kind === 'memory'));
+  const positions = new Float32Array(selected.length * 3);
+  const sizes = new Float32Array(selected.length);
+  const phases = new Float32Array(selected.length);
+  const freqs = new Float32Array(selected.length);
+  const amps = new Float32Array(selected.length);
+  const majors = new Float32Array(selected.length);
+  selected.forEach((n: any, i: number) => {
+    const weight = Math.max(1, Number(n.weight || n.count || 1));
+    positions[i * 3] = n.x; positions[i * 3 + 1] = n.y; positions[i * 3 + 2] = n.z;
+    const degreeBoost = Math.min(10, Number(n._degree || 0) * 1.9);
+    const variedSize = (n.size || size) + degreeBoost;
+    sizes[i] = Math.max(size * 1.14, Math.min(size * 2.65, variedSize * 1.62));
+    phases[i] = (n.twinkle || 0) * Math.PI * 2;
+    freqs[i] = n.twinkleFreq || 0.0012;
+    amps[i] = n.twinkleAmp || 0.12;
+    majors[i] = weight > 6.2 || (kind === 'memory' && weight > 4.8) ? 1 : 0;
+  });
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+  geometry.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1));
+  geometry.setAttribute('aFreq', new THREE.BufferAttribute(freqs, 1));
+  geometry.setAttribute('aAmp', new THREE.BufferAttribute(amps, 1));
+  geometry.setAttribute('aMajor', new THREE.BufferAttribute(majors, 1));
+  
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light' || document.documentElement.dataset.theme === 'light';
+  const themeColors = vis.mode === 'neural' ? neuralColors(isLight) : constellationColors(isLight);
+  let material: THREEns.Material;
+  if (vis.mode === 'neural') {
+    material = new THREE.PointsMaterial({
+      color,
+      map: makePointTexture(THREE, kind === 'memory' ? 'soma' : 'neuron'),
+      alphaTest: 0.04,
+      size,
+      sizeAttenuation: true,
+      transparent: true,
+      opacity: kind === 'memory' ? (themeColors.light ? 0.88 : 0.98) : (themeColors.light ? 0.76 : 0.86),
+      depthWrite: false,
+      blending: themeColors.light ? THREE.NormalBlending : THREE.AdditiveBlending
+    });
+  } else {
+    material = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uScale: { value: 420 },
+        uColor: { value: new THREE.Color(color) },
+        uIsStar: { value: kind === 'memory' ? 0 : 1 },
+        uOpacity: { value: kind === 'memory' ? 0.98 : 0.96 }
+      },
+      vertexShader: `
+        attribute float aSize;
+        attribute float aPhase;
+        attribute float aFreq;
+        attribute float aAmp;
+        attribute float aMajor;
+        uniform float uTime;
+        uniform float uScale;
+        varying float vPulse;
+        varying float vMajor;
+        void main(){
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          float wave = sin(uTime * aFreq + aPhase) + sin(uTime * aFreq * 0.43 + aPhase * 1.71) * 0.45;
+          vPulse = 1.0 + wave * aAmp;
+          vMajor = aMajor;
+          gl_PointSize = aSize * (0.98 + (vPulse - 1.0) * 0.32) * (uScale / max(72.0, -mvPosition.z));
+          gl_Position = projectionMatrix * mvPosition;
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 uColor;
+        uniform float uIsStar;
+        uniform float uOpacity;
+        varying float vPulse;
+        varying float vMajor;
+        void main(){
+          vec2 p = gl_PointCoord - vec2(0.5);
+          float d = length(p);
+          if(d > 0.5) discard;
+          float core = 1.0 - smoothstep(0.026, 0.060, d);
+          float body = 1.0 - smoothstep(0.060, 0.135, d);
+          float halo = (1.0 - smoothstep(0.13, 0.48, d)) * (0.15 + clamp(vPulse - 1.0, -0.30, 0.46) * 0.82);
+          float rayH = max(0.0, 1.0 - abs(p.y) / 0.010) * (1.0 - smoothstep(0.07, 0.44, abs(p.x)));
+          float rayV = max(0.0, 1.0 - abs(p.x) / 0.010) * (1.0 - smoothstep(0.07, 0.44, abs(p.y)));
+          float diag1 = max(0.0, 1.0 - abs(p.x - p.y) / 0.013) * (1.0 - smoothstep(0.06, 0.26, d));
+          float diag2 = max(0.0, 1.0 - abs(p.x + p.y) / 0.013) * (1.0 - smoothstep(0.06, 0.26, d));
+          float rays = vMajor * (max(rayH, rayV) * 0.50 + max(diag1, diag2) * 0.16);
+          float alpha = (body * 0.46 + core * 1.02 + halo + rays) * uOpacity * clamp(0.72 + (vPulse - 1.0) * 0.92, 0.46, 1.35);
+          if(alpha < 0.022) discard;
+          vec3 starCore = mix(uColor, vec3(1.0), core * 0.88 + rays * 0.38);
+          vec3 memoryCore = mix(uColor, vec3(1.0), core * 0.34);
+          vec3 crisp = mix(memoryCore, starCore, uIsStar);
+          gl_FragColor = vec4(crisp * (0.92 + (vPulse - 1.0) * 0.22), min(alpha, 1.0));
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.NormalBlending
+    });
+  }
+  const points = new THREE.Points(geometry, material);
+  points.userData.nodes = selected;
+  scene.add(points);
+  return points;
+}
+
+function addHaloPoints(THREE: ThreeModule, vis: any, scene: THREEns.Scene | THREEns.Group, nodes: any[], kind: string, color: string, size: number) {
+  let selected = nodes.filter((n: any) => (n.kind === 'memory') === (kind === 'memory'));
+  if (vis.mode !== 'neural') {
+    selected = selected
+      .filter((n: any) => {
+        const weight = Math.max(1, Number(n.weight || n.count || 1));
+        return weight > (kind === 'memory' ? 3.6 : 4.4) || Number(n._degree || 0) > 3;
+      })
+      .sort((a: any, b: any) => (Math.max(1, Number(b.weight || b.count || 1)) + Number(b._degree || 0)) - (Math.max(1, Number(a.weight || a.count || 1)) + Number(a._degree || 0)))
+      .slice(0, kind === 'memory' ? 30 : 44);
+  }
+  const positions = new Float32Array(selected.length * 3);
+  selected.forEach((n: any, i: number) => { positions[i * 3] = n.x; positions[i * 3 + 1] = n.y; positions[i * 3 + 2] = n.z; });
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light' || document.documentElement.dataset.theme === 'light';
+  const themeColors = vis.mode === 'neural' ? neuralColors(isLight) : constellationColors(isLight);
+  const opacity = vis.mode === 'neural'
+    ? (kind === 'memory' ? (themeColors.light ? 0.16 : 0.28) : (themeColors.light ? 0.18 : 0.34))
+    : (kind === 'memory' ? (themeColors.light ? 0.12 : 0.24) : (themeColors.light ? 0.13 : 0.26));
+  const material = new THREE.PointsMaterial({
+    color,
+    map: makePointTexture(THREE, 'orb'),
+    alphaTest: 0.015,
+    size,
+    sizeAttenuation: true,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+    blending: themeColors.light ? THREE.NormalBlending : THREE.AdditiveBlending
+  });
+  const points = new THREE.Points(geometry, material);
+  scene.add(points);
+  return points;
+}
+
+function addNeuralDendrites(THREE: ThreeModule, group: THREEns.Group, nodes: any[], colors: any) {
+  const trunks: number[] = [];
+  const twigs: number[] = [];
+  const tips: number[] = [];
+  nodes.slice(0, 150).forEach((n: any, i: number) => {
+    const arms = n.kind === 'memory' ? 3 : 6;
+    const base = n.kind === 'memory' ? 10 : 17;
+    for (let a = 0; a < arms; a++) {
+      const theta = (a / arms) * Math.PI * 2 + (i % 11) * 0.19;
+      const phi = Math.sin(i * 0.37 + a) * 0.58;
+      const len = base + ((i + a * 13) % 9);
+      const mid = [n.x + Math.cos(theta + 0.16) * Math.cos(phi) * len * 0.50, n.y + Math.sin(phi) * len * 0.36, n.z + Math.sin(theta + 0.16) * Math.cos(phi) * len * 0.50];
+      const end = [n.x + Math.cos(theta) * Math.cos(phi) * len * 0.78, n.y + Math.sin(phi) * len * 0.54, n.z + Math.sin(theta) * Math.cos(phi) * len * 0.78];
+      trunks.push(n.x, n.y, n.z, mid[0], mid[1], mid[2], mid[0], mid[1], mid[2], end[0], end[1], end[2]);
+      if (n.kind !== 'memory' && a % 2 === 0) {
+        const side = theta + (a % 2 ? 0.44 : -0.40);
+        const fork = [mid[0] + Math.cos(side) * len * 0.18, mid[1] + Math.sin(phi + 0.25) * len * 0.12, mid[2] + Math.sin(side) * len * 0.18];
+        twigs.push(mid[0], mid[1], mid[2], fork[0], fork[1], fork[2]);
+      }
+      if (i % 3 === 0 && a % 2 === 0) tips.push(end[0], end[1], end[2]);
+    }
+  });
+  
+  const trunkGeom = new THREE.BufferGeometry();
+  trunkGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(trunks), 3));
+  group.add(new THREE.LineSegments(trunkGeom, new THREE.LineBasicMaterial({
+    color: colors.entity,
+    transparent: true,
+    opacity: colors.light ? 0.34 : 0.36,
+    blending: colors.light ? THREE.NormalBlending : THREE.AdditiveBlending,
+    depthWrite: false
+  })));
+  
+  const twigGeom = new THREE.BufferGeometry();
+  twigGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(twigs), 3));
+  group.add(new THREE.LineSegments(twigGeom, new THREE.LineBasicMaterial({
+    color: colors.link,
+    transparent: true,
+    opacity: colors.light ? 0.28 : 0.24,
+    blending: colors.light ? THREE.NormalBlending : THREE.AdditiveBlending,
+    depthWrite: false
+  })));
+  
+  const tipGeom = new THREE.BufferGeometry();
+  tipGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(tips), 3));
+  group.add(new THREE.Points(tipGeom, new THREE.PointsMaterial({
+    color: colors.entity,
+    map: makePointTexture(THREE, 'orb'),
+    alphaTest: 0.03,
+    size: 3.8,
+    transparent: true,
+    opacity: colors.light ? 0.54 : 0.72,
+    depthWrite: false,
+    blending: colors.light ? THREE.NormalBlending : THREE.AdditiveBlending
+  })));
+}
+
+function neuralAuraOverlay(regions: any[]) {
+  const regionList = (regions || []).slice(0, 9);
+  return `<div class="three-aura-layer">${regionList.map((r: any) => `<span class="three-aura-oval" data-region="${esc(r.label || '')}" style="opacity:0;transform:translate(-50%,-50%) rotate(${(Number(r.angle || 0) * 28).toFixed(1)}deg)"></span>`).join('')}</div>`;
+}
+
+function visualiserResponsiveFill(width: number, height: number) {
+  const w = Math.max(0, Number(width) || 0);
+  const h = Math.max(0, Number(height) || 0);
+  if (w < 760 || h < 520) return 1;
+  const widthFill = Math.max(0, Math.min(1, (w - 760) / 760));
+  const heightFill = Math.max(0, Math.min(1, (h - 520) / 360));
+  return 1 + Math.min(0.22, (widthFill * 0.16) + (heightFill * 0.06));
+}
+
+function threeEffectiveCameraZ(vis: any, rect: { width: number; height: number }) {
+  const fill = visualiserResponsiveFill(rect.width, rect.height);
+  const mobile = rect.width < 760 || rect.height < 520;
+  return vis.cameraZ / (mobile ? 1 : fill);
 }
 
 /* ──────────────────────────── main component ──────────────────────── */
 
 export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory }) => {
-  const mountRef = useRef<HTMLDivElement>(null);
-  const wrapRef  = useRef<HTMLDivElement>(null);
+  const mountRef  = useRef<HTMLDivElement>(null);
+  const wrapRef   = useRef<HTMLDivElement>(null);
+  const labelsRef = useRef<HTMLDivElement>(null);
 
-  // Three.js objects (refs — no state, no re-renders per frame)
-  const THREE_REF    = useRef<ThreeModule | null>(null);
-  const rendererRef  = useRef<THREEns.WebGLRenderer | null>(null);
-  const sceneRef     = useRef<THREEns.Scene | null>(null);
-  const cameraRef    = useRef<THREEns.PerspectiveCamera | null>(null);
-  const frameRef     = useRef<number | null>(null);
-  const clockRef     = useRef<{ start: number; last: number }>({ start: 0, last: 0 });
-
-  const nodesRef    = useRef<SceneNode[]>([]);
-  const nodeMeshes  = useRef<THREEns.Object3D[]>([]);
-  const edgeLines   = useRef<(THREEns.Line | THREEns.LineSegments)[]>([]);
-  const labelSprites= useRef<THREEns.Sprite[]>([]);
-  const regionMeshes= useRef<THREEns.Object3D[]>([]);
-  const starPoints  = useRef<THREEns.Points | null>(null);
-  const selRingRef  = useRef<THREEns.Mesh | null>(null);
-  const hovRingRef  = useRef<THREEns.Mesh | null>(null);
-
-  // Camera control
-  const camRef = useRef({
-    theta: -0.42, phi: Math.PI / 2 - 0.34,
-    radius: CAMERA_Z_CONST,
-    panOffset: { x: 0, y: 0, z: 0 },
-    zoom: 1.0,
-    autoRotate: true,
-    cameraMode: 'rotate' as CameraMode,
-    dragMode: null as 'rotate' | 'pan' | null,
-    dragStartX: 0, dragStartY: 0,
-    dragThetaStart: 0, dragPhiStart: 0,
-    dragPanStart: { x: 0, y: 0, z: 0 },
-    pinchStartDist: 0, pinchStartZoom: 1,
-    pointers: new Map<number, { x: number; y: number }>(),
+  // Three.js states (in a ref to bypass React rendering lag / closures in loops)
+  const threeVisRef = useRef({
+    mode: 'constellation' as VisualiserMode,
+    data: null as any,
+    renderer: null as THREEns.WebGLRenderer | null,
+    scene: null as THREEns.Scene | null,
+    camera: null as THREEns.PerspectiveCamera | null,
+    group: null as THREEns.Group | null,
+    nodes: [] as any[],
+    edgePairs: [] as any[],
+    labels: [] as any[],
+    pulses: [] as any[],
+    frame: 0 as number,
+    paused: false,
+    panMode: false,
+    drag: null as any,
+    pointer: new Map<number, { x: number; y: number }>(),
+    yaw: 0,
+    pitch: 0.32,
+    cameraZ: 780,
+    panX: 0,
+    panY: 0,
+    lastT: 0,
+    pulsePoints: null as THREEns.Points | null,
+    neuralRegions: [] as any[],
+    THREE: null as ThreeModule | null,
   });
 
-  // React state (UI redraws only)
+  const selRingRef = useRef<THREEns.Mesh | null>(null);
+  const hovRingRef = useRef<THREEns.Mesh | null>(null);
+
+  // React state (UI only)
   const [threeReady, setThreeReady]     = useState(false);
   const [threeError, setThreeError]     = useState('');
   const [loading, setLoading]           = useState(true);
@@ -333,20 +648,20 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
   const [selectedNode, setSelectedNode] = useState<SceneNode | null>(null);
   const [hoveredNode, setHoveredNode]   = useState<SceneNode | null>(null);
 
-  // Latest values accessible inside rAF without stale closures
-  const modeRef         = useRef(mode);
-  const pausedRef       = useRef(paused);
+  // Sync state values to Ref so that they are visible in anim loop instantly
   const selectedNodeRef = useRef<SceneNode | null>(null);
   const hoveredNodeRef  = useRef<SceneNode | null>(null);
 
-  useEffect(() => { modeRef.current     = mode;          }, [mode]);
-  useEffect(() => { pausedRef.current   = paused;        }, [paused]);
+  useEffect(() => { threeVisRef.current.mode = mode; }, [mode]);
+  useEffect(() => { threeVisRef.current.paused = paused; }, [paused]);
+  useEffect(() => { threeVisRef.current.panMode = (cameraMode === 'pan'); }, [cameraMode]);
   useEffect(() => { selectedNodeRef.current = selectedNode; }, [selectedNode]);
-  useEffect(() => { hoveredNodeRef.current  = hoveredNode;  }, [hoveredNode]);
+  useEffect(() => { hoveredNodeRef.current = hoveredNode; }, [hoveredNode]);
 
   const [selectedMemoryDetail, setSelectedMemoryDetail] = useState<any>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
+  // Details fetch
   useEffect(() => {
     if (selectedNode && selectedNode.kind === 'memory' && selectedNode.memory_id) {
       setLoadingDetail(true);
@@ -366,402 +681,335 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
     }
   }, [selectedNode]);
 
-  /* ─────────── lazy-load Three.js + init renderer ─────────── */
-  useEffect(() => {
-    let cancelled = false;
-    getThree()
-      .then((THREE) => {
-        if (cancelled) return;
-        THREE_REF.current = THREE;
+  /* ─────────── clamp camera ─────────── */
+  const clampThreeCamera = () => {
+    const vis = threeVisRef.current;
+    const rect = mountRef.current?.getBoundingClientRect() || { width: 680, height: 680 };
+    const fallbackZ = vis.mode === 'neural' ? 600 : 760;
+    const minCameraZ = fallbackZ / 10;
+    vis.cameraZ = Math.max(minCameraZ, Math.min(1800, Number.isFinite(vis.cameraZ) ? vis.cameraZ : fallbackZ));
+    vis.yaw = Number.isFinite(vis.yaw) ? vis.yaw : 0;
+    vis.pitch = Math.max(-1.15, Math.min(1.15, Number.isFinite(vis.pitch) ? vis.pitch : 0.32));
+    const zoomFactor = 900 / Math.max(80, vis.cameraZ);
+    const panLimitX = Math.max(120, rect.width * (0.45 + zoomFactor * 0.18));
+    const panLimitY = Math.max(120, rect.height * (0.34 + zoomFactor * 0.12));
+    vis.panX = Math.max(-panLimitX, Math.min(panLimitX, Number.isFinite(vis.panX) ? vis.panX : 0));
+    vis.panY = Math.max(-panLimitY, Math.min(panLimitY, Number.isFinite(vis.panY) ? vis.panY : 0));
+  };
 
-        const mount = mountRef.current;
-        if (!mount) return;
-
-        const renderer = new THREE.WebGLRenderer({
-          antialias: true, alpha: false, powerPreference: 'high-performance',
-        });
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        renderer.setSize(mount.clientWidth || 1000, mount.clientHeight || 680);
-        renderer.outputColorSpace = THREE.SRGBColorSpace;
-        mount.appendChild(renderer.domElement);
-        renderer.domElement.style.cssText = 'width:100%;height:100%;cursor:grab;display:block;';
-        rendererRef.current = renderer;
-
-        const threeScene = new THREE.Scene();
-        sceneRef.current = threeScene;
-
-        const camera = new THREE.PerspectiveCamera(
-          FOV_CONST,
-          (mount.clientWidth || 1000) / (mount.clientHeight || 680),
-          1, 6000,
-        );
-        camera.position.set(0, 0, CAMERA_Z_CONST);
-        cameraRef.current = camera;
-
-        threeScene.add(new THREE.AmbientLight(0xffffff, 0.6));
-        const dir = new THREE.DirectionalLight(0xffffff, 0.5);
-        dir.position.set(200, 400, 300);
-        threeScene.add(dir);
-
-        // Rings — always in scene, invisible until a node is picked
-        const ringGeo  = new THREE.RingGeometry(1.0, 1.12, 48);
-        const selRing  = new THREE.Mesh(ringGeo,
-          new THREE.MeshBasicMaterial({ color: 0xffe08a, side: THREE.DoubleSide, transparent: true, opacity: 0.95, depthWrite: false }));
-        const hovRing  = new THREE.Mesh(ringGeo.clone(),
-          new THREE.MeshBasicMaterial({ color: 0xf7f8ff, side: THREE.DoubleSide, transparent: true, opacity: 0.72, depthWrite: false }));
-        selRing.visible = hovRing.visible = false;
-        selRing.renderOrder = hovRing.renderOrder = 999;
-        threeScene.add(selRing, hovRing);
-        selRingRef.current = selRing;
-        hovRingRef.current = hovRing;
-
-        clockRef.current.start = performance.now();
-        clockRef.current.last  = 0;
-
-        setThreeReady(true);
-      })
-      .catch((err: any) => {
-        if (!cancelled) setThreeError(err?.message || 'Failed to load 3D engine');
+  /* ─────────── update HTML labels & ovals ─────────── */
+  const updateThreeAuras = (rect: { width: number; height: number }, v: THREEns.Vector3) => {
+    const vis = threeVisRef.current;
+    if (vis.mode !== 'neural' || !labelsRef.current) return;
+    const mobile = rect.width < 520;
+    
+    labelsRef.current.querySelectorAll<HTMLSpanElement>('.three-aura-oval').forEach((el) => {
+      const region = el.dataset.region || '';
+      const pts = vis.nodes.filter((n: any) => n.neuralRegion === region);
+      const screens: { x: number; y: number }[] = [];
+      pts.forEach((n: any) => {
+        v.set(n.x, n.y, n.z).applyMatrix4(vis.group!.matrixWorld).project(vis.camera!);
+        if (v.z < 1 && v.z > -1) {
+          screens.push({
+            x: (v.x * 0.5 + 0.5) * rect.width,
+            y: (-v.y * 0.5 + 0.5) * rect.height
+          });
+        }
       });
-
-    return () => {
-      cancelled = true;
-      if (frameRef.current) cancelAnimationFrame(frameRef.current);
-      const renderer = rendererRef.current;
-      const mount    = mountRef.current;
-      if (renderer) {
-        renderer.dispose();
-        if (mount && mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
+      if (screens.length < 2) {
+        el.style.opacity = '0';
+        return;
       }
-      rendererRef.current = null;
-      sceneRef.current    = null;
-      cameraRef.current   = null;
-      THREE_REF.current   = null;
-    };
-  }, []); // once
-
-  /* ─────────── resize observer ─────────── */
-  useEffect(() => {
-    const wrap = wrapRef.current;
-    if (!wrap) return;
-    const ro = new ResizeObserver(() => {
-      const w = wrap.clientWidth  || 1000;
-      const h = wrap.clientHeight || 680;
-      rendererRef.current?.setSize(w, h, false);
-      const cam = cameraRef.current;
-      if (cam) { cam.aspect = w / h; cam.updateProjectionMatrix(); }
+      const xs = screens.map(p => p.x);
+      const ys = screens.map(p => p.y);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+      const cx = (minX + maxX) / 2;
+      const cy = (minY + maxY) / 2;
+      const maxW = mobile ? rect.width * 0.62 : Math.min(340, rect.width * 0.34);
+      const maxH = mobile ? rect.height * 0.30 : Math.min(230, rect.height * 0.26);
+      const w = Math.max(mobile ? 92 : 128, Math.min(maxW, (maxX - minX) + (mobile ? 46 : 74)));
+      const h = Math.max(mobile ? 58 : 78, Math.min(maxH, (maxY - minY) + (mobile ? 34 : 56)));
+      el.style.left = `${cx}px`;
+      el.style.top = `${cy}px`;
+      el.style.width = `${w}px`;
+      el.style.height = `${h}px`;
+      el.style.opacity = screens.length > 4 ? '0.42' : '0.28';
     });
-    ro.observe(wrap);
-    return () => ro.disconnect();
-  }, []);
+  };
 
-  /* ─────────── data fetch ─────────── */
-  const fetchConstellation = useCallback(() => {
-    setLoading(true);
-    setSceneError('');
-    fetchJSON(`${API}/constellation?limit=240`)
-      .then((payload) => setData(payload))
-      .catch((err: any) => setSceneError(err?.message || t('visualiser.loadError')))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => { fetchConstellation(); }, []);
+  const updateThreeLabels = (rect: { width: number; height: number }, time: number) => {
+    const vis = threeVisRef.current;
+    if (!vis.camera || !vis.group || !labelsRef.current) return;
+    const THREE = vis.THREE!;
+    const v = new THREE.Vector3();
+    
+    updateThreeAuras(rect, v);
+    
+    const labelBoxes: { x: number; y: number; w: number; h: number }[] = [];
+    const effectiveCameraZ = threeEffectiveCameraZ(vis, rect);
+    const zoomReveal = vis.mode === 'neural'
+      ? Math.max(0, Math.min(1, (900 - effectiveCameraZ) / 420))
+      : Math.max(0, Math.min(1, (760 - effectiveCameraZ) / 520));
+    
+    const maxLabels = vis.mode === 'neural'
+      ? ((rect.width < 520 ? 14 : 24) + Math.round(zoomReveal * (rect.width < 520 ? 14 : 18)))
+      : (rect.width < 520 ? (12 + Math.round(zoomReveal * 12)) : (20 + Math.round(zoomReveal * 18)));
+      
+    let shown = 0;
+    labelsRef.current.querySelectorAll<HTMLSpanElement>('.three-label').forEach((el, i) => {
+      const n = vis.labels[i];
+      if (!n) return;
+      v.set(n.x, n.y, n.z).applyMatrix4(vis.group!.matrixWorld).project(vis.camera!);
+      const sx = (v.x * 0.5 + 0.5) * rect.width;
+      const sy = (-v.y * 0.5 + 0.5) * rect.height;
+      const visible = v.z < 1 && v.z > -1 && sx > 8 && sx < rect.width - 8 && sy > 8 && sy < rect.height - 8;
+      const pulse = vis.mode === 'neural' && i > 3 ? Math.sin(time * 0.00032 + i * 1.73) : 1;
+      const box = { x: sx - 54, y: sy - 13, w: 108, h: 24 };
+      const collides = labelBoxes.some(b => !(box.x + box.w < b.x || b.x + b.w < box.x || box.y + box.h < b.y || b.y + b.h < box.y));
+      const show = visible && shown < maxLabels && !collides && (vis.mode !== 'neural' || i <= 3 || pulse > 0.08);
+      
+      el.style.display = show ? '' : 'none';
+      if (show) {
+        shown++;
+        labelBoxes.push(box);
+        el.style.left = `${sx}px`;
+        el.style.top = `${sy}px`;
+        const depthAlpha = Math.max(0.32, Math.min(0.86, 1 - Math.abs(v.z) * 0.35));
+        const pulseAlpha = vis.mode === 'neural' && i > 3 ? Math.min(0.78, 0.38 + pulse * 0.36) : depthAlpha;
+        el.style.opacity = String(Math.min(depthAlpha, pulseAlpha));
+      }
+    });
+  };
 
   /* ─────────── clear scene objects ─────────── */
   const clearScene = useCallback(() => {
-    const threeScene = sceneRef.current;
-    if (!threeScene) return;
-
-    nodeMeshes.current.forEach(m => {
-      threeScene.remove(m);
-      if ('geometry' in m) (m as any).geometry?.dispose?.();
-      if ('material' in m) (m as any).material?.dispose?.();
-    });
-    nodeMeshes.current = [];
-
-    edgeLines.current.forEach(l => {
-      threeScene.remove(l);
-      l.geometry?.dispose();
-      (l.material as any)?.dispose?.();
-    });
-    edgeLines.current = [];
-
-    labelSprites.current.forEach(s => {
-      threeScene.remove(s);
-      (s.material as any)?.dispose?.();
-    });
-    labelSprites.current = [];
-
-    regionMeshes.current.forEach(m => {
-      threeScene.remove(m);
-      if ('geometry' in m) (m as any).geometry?.dispose?.();
-      if ('material' in m) (m as any).material?.dispose?.();
-    });
-    regionMeshes.current = [];
-
-    if (starPoints.current) {
-      threeScene.remove(starPoints.current);
-      starPoints.current.geometry.dispose();
-      (starPoints.current.material as any).dispose?.();
-      starPoints.current = null;
+    const vis = threeVisRef.current;
+    if (vis.frame) {
+      cancelAnimationFrame(vis.frame);
+      vis.frame = 0;
     }
+    const scene = vis.scene;
+    if (scene) {
+      scene.traverse((obj: any) => {
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) {
+          if (Array.isArray(obj.material)) {
+            obj.material.forEach((m: any) => m.dispose());
+          } else {
+            obj.material.dispose();
+          }
+        }
+      });
+      while (scene.children.length > 0) {
+        scene.remove(scene.children[0]);
+      }
+    }
+    const renderer = vis.renderer;
+    const mount = mountRef.current;
+    if (renderer) {
+      renderer.dispose();
+      if (mount && mount.contains(renderer.domElement)) {
+        mount.removeChild(renderer.domElement);
+      }
+    }
+    if (labelsRef.current) {
+      labelsRef.current.innerHTML = '';
+    }
+    vis.renderer = null;
+    vis.scene = null;
+    vis.camera = null;
+    vis.group = null;
+    vis.nodes = [];
+    vis.edgePairs = [];
+    vis.labels = [];
+    vis.pulses = [];
+    vis.pulsePoints = null;
+    vis.neuralRegions = [];
   }, []);
 
   /* ─────────── build Three.js scene ─────────── */
   const buildThreeScene = useCallback((payload: any, nextMode: VisualiserMode) => {
-    const THREE     = THREE_REF.current;
-    const threeScene = sceneRef.current;
-    if (!THREE || !threeScene) return;
+    const vis = threeVisRef.current;
+    const THREE = vis.THREE;
+    const scene = vis.scene;
+    const group = vis.group;
+    if (!THREE || !scene || !group) return;
 
     clearScene();
 
-    const { nodes, edges, regions, stars } = buildSceneData(payload, nextMode);
-    nodesRef.current = nodes;
+    const mount = mountRef.current;
+    if (!mount) return;
 
-    const pal = PALETTES[nextMode];
-    threeScene.background = new THREE.Color(pal.bgHex);
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light' || document.documentElement.dataset.theme === 'light';
+    const themeColors = getThemeColors(nextMode, isLight);
 
-    // ── star points (custom GLSL shader for per-point twinkling alpha) ──
-    {
-      const geo   = new THREE.BufferGeometry();
-      const pos   = new Float32Array(stars.length * 3);
-      const sizes = new Float32Array(stars.length);
-      const alphas = new Float32Array(stars.length);
-      stars.forEach((s, i) => {
-        pos[i * 3] = s.x; pos[i * 3 + 1] = s.y; pos[i * 3 + 2] = s.z;
-        sizes[i]  = s.r;
-        alphas[i] = s.a;
-      });
-      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-      geo.setAttribute('size',     new THREE.BufferAttribute(sizes, 1));
-      geo.setAttribute('alpha',    new THREE.BufferAttribute(alphas, 1));
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      powerPreference: 'high-performance',
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(mount.clientWidth || 1000, mount.clientHeight || 680);
+    renderer.setClearColor(themeColors.bg, 0);
+    
+    mount.prepend(renderer.domElement);
+    renderer.domElement.style.cssText = 'width:100%;height:100%;cursor:grab;display:block;position:absolute;top:0;left:0;z-index:1;';
+    vis.renderer = renderer;
 
-      const mat = new THREE.ShaderMaterial({
-        uniforms: {
-          color: { value: new THREE.Color(pal.starHex) },
-          time:  { value: 0 },
-        },
-        vertexShader: `
-          attribute float size;
-          attribute float alpha;
-          varying float vAlpha;
-          void main() {
-            vAlpha = alpha;
-            vec4 mv = modelViewMatrix * vec4(position, 1.0);
-            gl_PointSize = size * (350.0 / -mv.z);
-            gl_Position  = projectionMatrix * mv;
-          }
-        `,
-        fragmentShader: `
-          uniform vec3 color;
-          varying float vAlpha;
-          void main() {
-            float d = length(gl_PointCoord - vec2(0.5));
-            if (d > 0.5) discard;
-            float a = smoothstep(0.5, 0.0, d) * vAlpha;
-            gl_FragColor = vec4(color, a);
-          }
-        `,
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-      });
-      const pts = new THREE.Points(geo, mat);
-      pts.userData.starData = stars;
-      threeScene.add(pts);
-      starPoints.current = pts;
-    }
+    scene.background = new THREE.Color(themeColors.bg);
+    scene.fog = new THREE.FogExp2(themeColors.bg, nextMode === 'neural' ? 0.0011 : 0.0009);
 
-    // ── region ellipsoids (neural mode only) ──
+    vis.group = new THREE.Group();
+    scene.add(vis.group);
+
+    const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+    scene.add(ambient);
+
+    const pointLight = new THREE.PointLight(themeColors.star, 1.2, 1200);
+    pointLight.position.set(180, 220, 260);
+    scene.add(pointLight);
+
+    // Rings — always in scene, invisible until a node is picked
+    const ringGeo = new THREE.RingGeometry(1.0, 1.12, 48);
+    const selRing = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
+      color: 0xffe08a,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.95,
+      depthWrite: false
+    }));
+    const hovRing = new THREE.Mesh(ringGeo.clone(), new THREE.MeshBasicMaterial({
+      color: 0xf7f8ff,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.72,
+      depthWrite: false
+    }));
+    selRing.visible = hovRing.visible = false;
+    selRing.renderOrder = hovRing.renderOrder = 999;
+    scene.add(selRing, hovRing);
+    selRingRef.current = selRing;
+    hovRingRef.current = hovRing;
+
+    // Load nodes positions
+    let nodes: any[];
     if (nextMode === 'neural') {
-      regions.slice(0, 10).forEach((region, idx) => {
-        const regionColors = [0x4cab9e, 0x65d6ff, 0xffd166];
-        const geo  = new THREE.SphereGeometry(1, 16, 10);
-        const mat  = new THREE.MeshBasicMaterial({
-          color: regionColors[idx % 3],
-          transparent: true, opacity: 0.055,
-          side: THREE.FrontSide, depthWrite: false,
-          blending: THREE.AdditiveBlending,
+      nodes = buildThreeNeuralPositions(payload, vis);
+    } else {
+      nodes = buildThreePositions(payload);
+    }
+    vis.nodes = nodes;
+    const byId = new Map(nodes.map(n => [n.id, n]));
+
+    const rect = mount.getBoundingClientRect();
+    const mobileThree = rect.width < 520;
+    const edges = limitedThreeEdges(payload, byId, nextMode === 'neural', mobileThree);
+    vis.edgePairs = edges;
+
+    // Build curve line segments
+    const linkGeom = buildThreeLinkSegments(THREE, edges, nextMode === 'neural');
+    const linkMaterial = nextMode === 'neural'
+      ? new THREE.LineBasicMaterial({
+          color: themeColors.link,
+          transparent: true,
+          opacity: themeColors.light ? 0.30 : 0.40,
+          blending: themeColors.light ? THREE.NormalBlending : THREE.AdditiveBlending,
+          depthWrite: false
+        })
+      : new THREE.LineDashedMaterial({
+          color: themeColors.link,
+          transparent: true,
+          opacity: themeColors.light ? (mobileThree ? 0.14 : 0.16) : (mobileThree ? 0.13 : 0.12),
+          dashSize: 9,
+          gapSize: 8,
+          blending: THREE.NormalBlending,
+          depthWrite: false
         });
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.set(region.cx, region.cy, region.cz);
-        mesh.scale.set(region.spread * 3.2, region.spread * 2.0, region.spread * 2.6);
-        mesh.rotation.y = region.angle * 0.42;
-        threeScene.add(mesh);
-        regionMeshes.current.push(mesh);
+    const linkLines = new THREE.LineSegments(linkGeom, linkMaterial);
+    if (nextMode !== 'neural') linkLines.computeLineDistances();
+    vis.group.add(linkLines);
 
-        const wire = new THREE.LineSegments(
-          new THREE.EdgesGeometry(new THREE.SphereGeometry(0.72, 10, 6)),
-          new THREE.LineBasicMaterial({
-            color: idx % 3 === 2 ? 0xffe08a : 0x65d6ff,
-            transparent: true, opacity: 0.12,
-            depthWrite: false, blending: THREE.AdditiveBlending,
-          }),
-        );
-        wire.position.copy(mesh.position);
-        wire.scale.copy(mesh.scale);
-        wire.rotation.copy(mesh.rotation);
-        threeScene.add(wire);
-        regionMeshes.current.push(wire);
-      });
+    // Neural dendrites and halo points
+    if (nextMode === 'neural') {
+      addHaloPoints(THREE, vis, vis.group, nodes, 'entity', themeColors.star, 50);
+      addHaloPoints(THREE, vis, vis.group, nodes, 'memory', themeColors.memory, 48);
+      addNeuralDendrites(THREE, vis.group, nodes, themeColors);
     }
 
-    // ── edges ──
-    {
-      const byId: Record<string, SceneNode> = {};
-      nodes.forEach(n => { byId[n.id] = n; });
+    // Points (Core particles)
+    vis.group.add(addPoints(THREE, vis, vis.group, nodes, 'entity', themeColors.star, nextMode === 'neural' ? 30 : 52));
+    vis.group.add(addPoints(THREE, vis, vis.group, nodes, 'memory', themeColors.memory, nextMode === 'neural' ? 26 : 50));
 
-      const edgeLimit   = nextMode === 'neural' ? 260 : 200;
-      const degreeLimit = 6;
-      const edgeDeg     = new Map<string, number>();
-      let drawn = 0;
-
-      for (const edge of edges) {
-        if (drawn >= edgeLimit) break;
-        const a = byId[edge.source], b = byId[edge.target];
-        if (!a || !b) continue;
-        const da = edgeDeg.get(edge.source) || 0;
-        const db = edgeDeg.get(edge.target) || 0;
-        if (da >= degreeLimit || db >= degreeLimit) continue;
-        edgeDeg.set(edge.source, da + 1);
-        edgeDeg.set(edge.target, db + 1);
-        drawn++;
-
-        const isMemEdge = edge.kind === 'memory';
-        const edgeColor = new THREE.Color(isMemEdge ? pal.edgeMemoryHex : pal.edgeHex);
-        const opacity   = isMemEdge ? 0.42 : 0.28;
-
-        if (nextMode === 'neural') {
-          const start = new THREE.Vector3(a.wx, a.wy, a.wz);
-          const end   = new THREE.Vector3(b.wx, b.wy, b.wz);
-          const mid   = start.clone().add(end).multiplyScalar(0.5);
-          const perp  = new THREE.Vector3(-(end.y - start.y), end.x - start.x, 0).normalize();
-          const curveMag = Math.min(48, start.distanceTo(end) * 0.16) * ((edge.id.length % 2) ? 1 : -1);
-          mid.addScaledVector(perp, curveMag);
-          const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
-          const line = new THREE.Line(
-            new THREE.BufferGeometry().setFromPoints(curve.getPoints(20)),
-            new THREE.LineBasicMaterial({
-              color: edgeColor, transparent: true, opacity,
-              depthWrite: false, blending: THREE.AdditiveBlending,
-            }),
-          );
-          line.renderOrder = 1;
-          threeScene.add(line);
-          edgeLines.current.push(line);
-        } else {
-          const line = new THREE.LineSegments(
-            new THREE.BufferGeometry().setFromPoints([
-              new THREE.Vector3(a.wx, a.wy, a.wz),
-              new THREE.Vector3(b.wx, b.wy, b.wz),
-            ]),
-            new THREE.LineDashedMaterial({
-              color: edgeColor, transparent: true, opacity,
-              dashSize: 8, gapSize: 10,
-              depthWrite: false, blending: THREE.AdditiveBlending,
-            }),
-          );
-          line.computeLineDistances();
-          line.renderOrder = 1;
-          threeScene.add(line);
-          edgeLines.current.push(line as any);
-        }
-      }
+    // Star points background
+    const starCount = nextMode === 'neural' ? 360 : 420;
+    const starPositions = new Float32Array(starCount * 3);
+    for (let i = 0; i < starCount; i++) {
+      const r = 600 + ((i * 37) % 480);
+      const a = i * 2.17;
+      const b = ((i * 53) % 180 - 90) * Math.PI / 180;
+      starPositions.set([
+        Math.cos(a) * Math.cos(b) * r,
+        Math.sin(b) * r,
+        Math.cos(b) * Math.sin(a) * r
+      ], i * 3);
     }
+    const starGeom = new THREE.BufferGeometry();
+    starGeom.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+    scene.add(new THREE.Points(starGeom, new THREE.PointsMaterial({
+      color: 0xffffff,
+      map: makePointTexture(THREE, 'orb'),
+      alphaTest: 0.04,
+      size: 1.25,
+      transparent: true,
+      opacity: nextMode === 'neural' ? 0.38 : 0.24,
+      depthWrite: false
+    })));
 
-    // ── node glow sprites + core discs ──
-    {
-      nodes.forEach((node, nIdx) => {
-        const isMemory = node.kind === 'memory';
-        const baseColor = isMemory ? pal.memoryStr : pal.starStr;
-        const glowTex  = makeGlowTexture(THREE, baseColor, isMemory);
+    // Pulse points
+    const pulseEdges = nextMode === 'neural' ? edges.slice(0, 90) : [];
+    const pulseGeom = new THREE.BufferGeometry();
+    const pulsePositions = new Float32Array(pulseEdges.length * 3);
+    pulseGeom.setAttribute('position', new THREE.BufferAttribute(pulsePositions, 3));
+    const pulsePoints = new THREE.Points(pulseGeom, new THREE.PointsMaterial({
+      color: themeColors.pulse,
+      map: makePointTexture(THREE, 'star'),
+      alphaTest: 0.03,
+      size: nextMode === 'neural' ? 10.5 : 5.2,
+      transparent: true,
+      opacity: nextMode === 'neural' ? (themeColors.light ? 0.54 : 0.98) : 0.85,
+      depthWrite: false,
+      depthTest: false,
+      blending: themeColors.light ? THREE.NormalBlending : THREE.AdditiveBlending
+    }));
+    vis.group.add(pulsePoints);
+    vis.pulses = pulseEdges;
+    vis.pulsePoints = pulsePoints;
 
-        const glowMat  = new THREE.SpriteMaterial({
-          map: glowTex as any, transparent: true,
-          depthWrite: false, blending: THREE.AdditiveBlending,
-          opacity: isMemory ? 0.88 : 0.75,
-        });
-        const glow  = new THREE.Sprite(glowMat);
-        glow.position.set(node.wx, node.wy, node.wz);
-        const gs = node.radius * (isMemory ? 4.5 : 3.4);
-        glow.scale.set(gs, gs, 1);
-        glow.renderOrder = 2;
-        glow.userData.nodeId    = node.id;
-        glow.userData.nodeIndex = nIdx;
-        glow.userData.isGlow    = true;
-        threeScene.add(glow);
-        nodeMeshes.current.push(glow);
+    // HTML Labels overlay
+    const labelNodes = nodes.filter((n: any) => !/^[a-f0-9]{10,}$/i.test(String(n.label || ''))).sort((a: any, b: any) => (b._degree + b._weight) - (a._degree + a._weight)).slice(0, nextMode === 'neural' ? 72 : 56);
+    vis.labels = labelNodes;
 
-        const core = new THREE.Mesh(
-          new THREE.CircleGeometry(node.radius * 0.38, 16),
-          new THREE.MeshBasicMaterial({
-            color: 0xffffff, transparent: true, opacity: 0.97,
-            depthWrite: false, side: THREE.DoubleSide,
-          }),
-        );
-        core.position.set(node.wx, node.wy, node.wz);
-        core.renderOrder = 3;
-        core.userData.nodeId    = node.id;
-        core.userData.nodeIndex = nIdx;
-        core.userData.isCore   = true;
-        threeScene.add(core);
-        nodeMeshes.current.push(core);
-      });
+    if (labelsRef.current) {
+      labelsRef.current.innerHTML = neuralAuraOverlay(vis.neuralRegions) + labelNodes.map((n: any, i: number) => {
+        return `<span class="three-label ${n.kind === 'memory' ? 'memory' : ''}" data-i="${i}">${esc(String(n.label || '').replace(/^memory:/, 'mem ').slice(0, 24))}</span>`;
+      }).join('');
     }
-
-    // ── label sprites ──
-    {
-      const nodeDeg = new Map<string, number>();
-      edges.forEach(e => {
-        nodeDeg.set(e.source, (nodeDeg.get(e.source) || 0) + 1);
-        nodeDeg.set(e.target, (nodeDeg.get(e.target) || 0) + 1);
-      });
-
-      nodes.forEach(node => {
-        const raw   = labelForDisplay(node.label || '');
-        if (isTechnical(raw)) return;
-        const weight = Math.max(1, Number(node.weight || node.count || 1));
-        const deg    = nodeDeg.get(node.id) || 0;
-        const score  = Math.log1p(weight) * 0.52 + Math.log1p(deg) * 0.38 + (node.kind !== 'memory' ? 0.9 : 0.1);
-        if (score < 1.8) return;
-
-        const label   = shortLabel(raw);
-        const tex     = makeLabelTexture(THREE, label, pal.text);
-        const mat     = new THREE.SpriteMaterial({ map: tex as any, transparent: true, depthWrite: false });
-        const sprite  = new THREE.Sprite(mat);
-        const aspect  = (tex as any).image.width / (tex as any).image.height;
-        const lw      = node.radius * 3.2 * aspect;
-        const lh      = node.radius * 3.2;
-        sprite.scale.set(lw, lh, 1);
-        sprite.position.set(node.wx + node.radius * 1.8, node.wy + node.radius * 0.6, node.wz);
-        sprite.renderOrder = 4;
-        sprite.userData.nodeId = node.id;
-        threeScene.add(sprite);
-        labelSprites.current.push(sprite);
-      });
-    }
-
-    // Hide rings until something is selected
-    if (selRingRef.current) selRingRef.current.visible = false;
-    if (hovRingRef.current) hovRingRef.current.visible = false;
   }, [clearScene]);
 
   /* ─────────── reset camera ─────────── */
-  const resetView = useCallback((nextMode: VisualiserMode = modeRef.current) => {
-    const cam = camRef.current;
-    cam.theta  = -0.42;
-    cam.phi    = Math.PI / 2 - 0.34;
-    cam.radius = nextMode === 'neural' ? CAMERA_Z_NEURAL : CAMERA_Z_CONST;
-    cam.panOffset = { x: 0, y: 0, z: 0 };
-    cam.zoom       = 1.0;
-    cam.autoRotate = true;
-    const camera = cameraRef.current;
-    if (camera) {
-      camera.fov = nextMode === 'neural' ? FOV_NEURAL : FOV_CONST;
-      camera.updateProjectionMatrix();
-    }
+  const resetView = useCallback((nextMode: VisualiserMode = threeVisRef.current.mode) => {
+    const vis = threeVisRef.current;
+    vis.yaw = 0;
+    vis.pitch = 0.32;
+    vis.cameraZ = nextMode === 'neural' ? 600 : 760;
+    vis.panX = 0;
+    vis.panY = 0;
+    vis.paused = false;
     setPaused(false);
-    pausedRef.current = false;
+    clampThreeCamera();
   }, []);
 
   /* ─────────── rebuild when data/mode changes ─────────── */
@@ -774,239 +1022,429 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
     setHoveredNode(null);
   }, [threeReady, data, mode, buildThreeScene, resetView]);
 
+  /* ─────────── data fetch ─────────── */
+  const fetchConstellation = useCallback(() => {
+    setLoading(true);
+    setSceneError('');
+    fetchJSON(`${API}/constellation?limit=320`)
+      .then((payload) => setData(payload))
+      .catch((err: any) => setSceneError(err?.message || t('visualiser.loadError')))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { fetchConstellation(); }, []);
+
+  /* ─────────── lazy-load Three.js + init renderer ─────────── */
+  useEffect(() => {
+    let cancelled = false;
+    getThree()
+      .then((THREE) => {
+        if (cancelled) return;
+        const vis = threeVisRef.current;
+        vis.THREE = THREE;
+
+        const mount = mountRef.current;
+        if (!mount) return;
+
+        while (mount.firstChild) {
+          if (mount.firstChild !== labelsRef.current) {
+            mount.removeChild(mount.firstChild);
+          } else {
+            break;
+          }
+        }
+
+        const isLight = document.documentElement.getAttribute('data-theme') === 'light' || document.documentElement.dataset.theme === 'light';
+        const themeColors = getThemeColors(mode, isLight);
+
+        const renderer = new THREE.WebGLRenderer({
+          antialias: true,
+          alpha: true,
+          powerPreference: 'high-performance',
+        });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.setSize(mount.clientWidth || 1000, mount.clientHeight || 680);
+        renderer.setClearColor(themeColors.bg, 0);
+        
+        mount.prepend(renderer.domElement);
+        renderer.domElement.style.cssText = 'width:100%;height:100%;cursor:grab;display:block;position:absolute;top:0;left:0;z-index:1;';
+        vis.renderer = renderer;
+
+        const scene = new THREE.Scene();
+        vis.scene = scene;
+
+        const camera = new THREE.PerspectiveCamera(
+          48,
+          (mount.clientWidth || 1000) / (mount.clientHeight || 680),
+          1, 5000,
+        );
+        vis.camera = camera;
+
+        const group = new THREE.Group();
+        scene.add(group);
+        vis.group = group;
+
+        const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+        scene.add(ambient);
+
+        const pointLight = new THREE.PointLight(themeColors.star, 1.2, 1200);
+        pointLight.position.set(180, 220, 260);
+        scene.add(pointLight);
+
+        vis.yaw = 0;
+        vis.pitch = 0.32;
+        vis.cameraZ = mode === 'neural' ? 600 : 760;
+
+        setThreeReady(true);
+      })
+      .catch((err: any) => {
+        if (!cancelled) setThreeError(err?.message || 'Failed to load 3D engine');
+      });
+
+    return () => {
+      cancelled = true;
+      clearScene();
+    };
+  }, []);
+
+  /* ─────────── resize observer ─────────── */
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const ro = new ResizeObserver(() => {
+      const vis = threeVisRef.current;
+      if (!vis.renderer || !vis.camera) return;
+      const w = Math.max(320, wrap.clientWidth || 1000);
+      const h = Math.max(320, wrap.clientHeight || 680);
+      vis.renderer.setSize(w, h, false);
+      vis.camera.aspect = w / h;
+      vis.camera.updateProjectionMatrix();
+    });
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  }, []);
+
   /* ─────────── animation loop ─────────── */
   useEffect(() => {
     if (!threeReady || loading || sceneError || !data) return;
-    const renderer  = rendererRef.current;
-    const threeScene = sceneRef.current;
-    const camera     = cameraRef.current;
-    if (!renderer || !threeScene || !camera) return;
+    const vis = threeVisRef.current;
+    const renderer = vis.renderer;
+    const scene = vis.scene;
+    const camera = vis.camera;
+    const group = vis.group;
+    if (!renderer || !scene || !camera || !group) return;
 
-    const cam = camRef.current;
     let animFrame: number;
 
-    const animate = () => {
+    const animate = (time: number = 0) => {
       animFrame = requestAnimationFrame(animate);
-      frameRef.current = animFrame;
+      vis.frame = animFrame;
 
-      const now   = performance.now();
-      const time  = now - clockRef.current.start;
-      const delta = clockRef.current.last ? Math.min(64, now - clockRef.current.last) : 16;
-      clockRef.current.last = now;
+      const delta = vis.lastT ? Math.min(48, time - vis.lastT) : 16;
+      vis.lastT = time;
 
-      // Auto-rotation
-      const currentMode = modeRef.current;
-      if (!pausedRef.current && cam.dragMode === null && cam.autoRotate) {
-        const speed = currentMode === 'neural' ? 0.000032 : 0.000065;
-        cam.theta += delta * speed;
+      // Auto rotation
+      if (!vis.paused && !vis.drag) {
+        vis.yaw += delta * (vis.mode === 'neural' ? 0.00009 : 0.000055);
       }
 
-      // Camera position from spherical coords
-      const r    = cam.radius * cam.zoom;
-      const phi  = Math.max(0.15, Math.min(Math.PI - 0.15, cam.phi));
-      const px   = r * Math.sin(phi) * Math.sin(cam.theta);
-      const py   = r * Math.cos(phi);
-      const pz   = r * Math.sin(phi) * Math.cos(cam.theta);
-      const po   = cam.panOffset;
-      camera.position.set(px + po.x, py + po.y, pz + po.z);
-      camera.lookAt(po.x, po.y, po.z);
+      // Clamp camera
+      clampThreeCamera();
 
-      // Twinkle glow sprites
-      const nodes = nodesRef.current;
-      nodeMeshes.current.forEach(m => {
-        if (!m.userData.isGlow) return;
-        const node = nodes[m.userData.nodeIndex as number];
-        if (!node) return;
-        const pulse = 1 + Math.sin(time * node.twinkleFreq + node.twinkle * 6.28) * node.twinkleAmp;
-        const base  = node.radius * (node.kind === 'memory' ? 4.5 : 3.4) * pulse;
-        (m as THREEns.Sprite).scale.set(base, base, 1);
-      });
+      // Rotate group
+      group.rotation.y = vis.yaw;
+      group.rotation.x = vis.pitch;
 
-      // Update star time uniform
-      if (starPoints.current) {
-        ((starPoints.current.material as THREEns.ShaderMaterial).uniforms.time.value) = time * 0.001;
+      // Position camera
+      const rect = mountRef.current?.getBoundingClientRect() || { width: 650, height: 650 };
+      const effectiveCameraZ = threeEffectiveCameraZ(vis, rect);
+      camera.position.set(vis.panX, vis.panY, effectiveCameraZ);
+      camera.lookAt(vis.panX, vis.panY, 0);
+
+      // Pulse points along curves
+      if (vis.pulsePoints) {
+        const attr = vis.pulsePoints.geometry.attributes.position as THREEns.BufferAttribute;
+        const arr = attr.array as Float32Array;
+        vis.pulses.forEach((e: any, i: number) => {
+          const phase = (time * 0.00030 + (i % 17) / 17) % 1;
+          const inv = 1 - phase;
+          if (e._curve) {
+            arr[i * 3]     = inv * inv * e.a.x + 2 * inv * phase * e._curve.cx + phase * phase * e.b.x;
+            arr[i * 3 + 1] = inv * inv * e.a.y + 2 * inv * phase * e._curve.cy + phase * phase * e.b.y;
+            arr[i * 3 + 2] = inv * inv * e.a.z + 2 * inv * phase * e._curve.cz + phase * phase * e.b.z;
+          } else {
+            arr[i * 3]     = e.a.x + (e.b.x - e.a.x) * phase;
+            arr[i * 3 + 1] = e.a.y + (e.b.y - e.a.y) * phase;
+            arr[i * 3 + 2] = e.a.z + (e.b.z - e.a.z) * phase;
+          }
+        });
+        attr.needsUpdate = true;
       }
 
-      // Billboard core discs toward camera
-      nodeMeshes.current.forEach(m => {
-        if (m.userData.isCore) m.quaternion.copy(camera.quaternion);
+      // Update shader uniform time
+      scene.traverse((obj: any) => {
+        if (obj.isPoints && obj.material?.uniforms?.uTime) {
+          obj.material.uniforms.uTime.value = time;
+          obj.material.uniforms.uScale.value = Math.max(360, Math.min(820, renderer.domElement.clientHeight || 420));
+        }
       });
 
-      // Sync selection / hover rings
+      // Update HTML labels
+      updateThreeLabels(rect, time);
+
+      // Sync selection and hover rings
       const selNode = selectedNodeRef.current;
       const hovNode = hoveredNodeRef.current;
       const selRing = selRingRef.current;
       const hovRing = hovRingRef.current;
 
+      const THREE = vis.THREE!;
       if (selRing) {
         if (selNode) {
           selRing.visible = true;
-          selRing.position.set(selNode.wx, selNode.wy, selNode.wz);
+          const worldPos = new THREE.Vector3(selNode.x, selNode.y, selNode.z).applyMatrix4(group.matrixWorld);
+          selRing.position.copy(worldPos);
           selRing.quaternion.copy(camera.quaternion);
-          const rs = selNode.radius * 2.6;
+          const rs = (selNode.size || 10) * 0.45;
           selRing.scale.set(rs, rs, rs);
-        } else { selRing.visible = false; }
+        } else {
+          selRing.visible = false;
+        }
       }
       if (hovRing) {
         if (hovNode && hovNode.id !== selNode?.id) {
           hovRing.visible = true;
-          hovRing.position.set(hovNode.wx, hovNode.wy, hovNode.wz);
+          const worldPos = new THREE.Vector3(hovNode.x, hovNode.y, hovNode.z).applyMatrix4(group.matrixWorld);
+          hovRing.position.copy(worldPos);
           hovRing.quaternion.copy(camera.quaternion);
-          const rh = hovNode.radius * 2.6;
+          const rh = (hovNode.size || 10) * 0.45;
           hovRing.scale.set(rh, rh, rh);
-        } else { hovRing.visible = false; }
+        } else {
+          hovRing.visible = false;
+        }
       }
 
-      renderer.render(threeScene, camera);
+      renderer.render(scene, camera);
     };
 
-    animate();
+    animate(0);
     return () => cancelAnimationFrame(animFrame);
-  }, [threeReady, data, loading, sceneError]);
+  }, [threeReady, loading, sceneError, data]);
 
   /* ─────────── pointer / wheel interaction ─────────── */
   useEffect(() => {
     if (!threeReady || loading || sceneError || !data) return;
-    const canvas = rendererRef.current?.domElement;
-    if (!canvas) return;
+    const viewport = mountRef.current;
+    if (!viewport) return;
 
-    const THREE = THREE_REF.current!;
-    const cam   = camRef.current;
-    const raycaster = new THREE.Raycaster();
-
-    const pickNode = (clientX: number, clientY: number): SceneNode | null => {
-      const camera = cameraRef.current;
-      if (!camera) return null;
-      const rect = canvas.getBoundingClientRect();
-      const ndc  = new THREE.Vector2(
-        ((clientX - rect.left) / rect.width)  * 2 - 1,
-        -((clientY - rect.top)  / rect.height) * 2 + 1,
-      );
-      raycaster.setFromCamera(ndc, camera);
-      const cores  = nodeMeshes.current.filter(m => m.userData.isCore);
-      const hits   = raycaster.intersectObjects(cores);
-      const nodes  = nodesRef.current;
-      const byId: Record<string, SceneNode> = {};
-      nodes.forEach(n => { byId[n.id] = n; });
-      if (hits.length > 0) return byId[hits[0].object.userData.nodeId as string] || null;
-
-      // Fallback: screen-space sphere test
-      const w = rect.width, h = rect.height;
-      const cx = clientX - rect.left, cy = clientY - rect.top;
-      let best: SceneNode | null = null, bestD = Infinity;
-      for (const node of nodes) {
-        const v  = new THREE.Vector3(node.wx, node.wy, node.wz).project(camera);
-        const sx = (v.x + 1) / 2 * w, sy = (1 - (v.y + 1) / 2) * h;
-        const d  = Math.hypot(sx - cx, sy - cy);
-        if (d < Math.max(18, node.radius * 2.2) && d < bestD) { best = node; bestD = d; }
-      }
-      return best;
+    const vis = threeVisRef.current;
+    const THREE = vis.THREE!;
+    const pointers = vis.pointer;
+    
+    const dist = () => {
+      const ps = [...pointers.values()];
+      return ps.length < 2 ? 1 : Math.max(1, Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y));
+    };
+    
+    const center = () => {
+      const ps = [...pointers.values()];
+      return ps.length < 2 ? { x: 0, y: 0 } : { x: (ps[0].x + ps[1].x) / 2, y: (ps[0].y + ps[1].y) / 2 };
     };
 
     const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      cam.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, cam.zoom * Math.exp(-e.deltaY * 0.0012)));
+      if (e.cancelable) e.preventDefault();
+      vis.cameraZ *= Math.exp(e.deltaY * 0.001);
+      clampThreeCamera();
     };
 
     const handlePointerDown = (e: PointerEvent) => {
       if (e.cancelable) e.preventDefault();
-      try { canvas.setPointerCapture(e.pointerId); } catch {}
-      cam.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (cam.pointers.size === 1) {
-        cam.dragMode = cam.cameraMode === 'pan' || e.shiftKey || e.button === 1 || e.button === 2 ? 'pan' : 'rotate';
-        cam.dragStartX = e.clientX; cam.dragStartY = e.clientY;
-        cam.dragThetaStart = cam.theta; cam.dragPhiStart = cam.phi;
-        cam.dragPanStart   = { ...cam.panOffset };
+      try { viewport.setPointerCapture?.(e.pointerId); } catch (_err) {}
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      
+      if (pointers.size >= 2) {
+        const c = center();
+        vis.drag = {
+          mode: 'pinch',
+          x: c.x,
+          y: c.y,
+          dist: dist(),
+          cameraZ: vis.cameraZ,
+          panX: vis.panX,
+          panY: vis.panY,
+          moved: false
+        };
+      } else {
+        vis.drag = {
+          mode: 'drag',
+          x: e.clientX,
+          y: e.clientY,
+          yaw: vis.yaw,
+          pitch: vis.pitch,
+          panX: vis.panX,
+          panY: vis.panY,
+          moved: false
+        };
       }
-      canvas.style.cursor = 'grabbing';
+      viewport.style.cursor = 'grabbing';
     };
 
     const handlePointerMove = (e: PointerEvent) => {
-      cam.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-      if (cam.pointers.size === 2) {
-        const pts = [...cam.pointers.values()];
-        const d   = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-        if (cam.pinchStartDist === 0) { cam.pinchStartDist = d; cam.pinchStartZoom = cam.zoom; }
-        else cam.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, cam.pinchStartZoom * (d / cam.pinchStartDist)));
-        return;
-      }
-
-      if (cam.dragMode === null) {
-        const hit = pickNode(e.clientX, e.clientY);
-        if (hit?.id !== hoveredNodeRef.current?.id) { hoveredNodeRef.current = hit; setHoveredNode(hit); }
-        canvas.style.cursor = hit ? 'pointer' : 'grab';
-        return;
-      }
-
+      if (!pointers.has(e.pointerId) || !vis.drag) return;
       if (e.cancelable) e.preventDefault();
-      const dx = e.clientX - cam.dragStartX, dy = e.clientY - cam.dragStartY;
-      if (cam.dragMode === 'rotate') {
-        cam.theta = cam.dragThetaStart - dx * 0.008;
-        cam.phi   = Math.max(0.15, Math.min(Math.PI - 0.15, cam.dragPhiStart + dy * 0.006));
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      
+      const d = vis.drag;
+      if (d.mode === 'pinch') {
+        if (pointers.size < 2) return;
+        const c = center();
+        const scale = dist() / Math.max(1, d.dist);
+        vis.cameraZ = d.cameraZ / Math.max(0.35, Math.min(2.8, scale));
+        vis.panX = d.panX - (c.x - d.x) * 0.72;
+        vis.panY = d.panY + (c.y - d.y) * 0.72;
+        d.moved = d.moved || Math.abs(c.x - d.x) + Math.abs(c.y - d.y) > 3 || Math.abs(scale - 1) > 0.015;
+        clampThreeCamera();
+        return;
+      }
+      
+      const dx = e.clientX - d.x;
+      const dy = e.clientY - d.y;
+      if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
+      
+      if (vis.panMode || e.shiftKey) {
+        vis.panX = d.panX - dx * 0.7;
+        vis.panY = d.panY + dy * 0.7;
       } else {
-        const camera = cameraRef.current;
-        if (!camera) return;
-        const right = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0);
-        const up    = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1);
-        const scale = cam.zoom * cam.radius * 0.0014;
-        cam.panOffset = {
-          x: cam.dragPanStart.x - right.x * dx * scale + up.x * dy * scale,
-          y: cam.dragPanStart.y - right.y * dx * scale + up.y * dy * scale,
-          z: cam.dragPanStart.z - right.z * dx * scale + up.z * dy * scale,
-        };
+        vis.yaw = d.yaw + dx * 0.006;
+        vis.pitch = d.pitch + dy * 0.004;
+      }
+      clampThreeCamera();
+
+      // Update hover state
+      if (!d.moved) {
+        const rect = viewport.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const v = new THREE.Vector3();
+        let best = null;
+        let bestD = Infinity;
+
+        for (const n of vis.nodes) {
+          v.set(n.x, n.y, n.z).applyMatrix4(vis.group!.matrixWorld).project(vis.camera!);
+          if (v.z < -1 || v.z > 1) continue;
+          const sx = (v.x * 0.5 + 0.5) * rect.width;
+          const sy = (-v.y * 0.5 + 0.5) * rect.height;
+          const dDist = Math.hypot(sx - mouseX, sy - mouseY);
+          if (dDist < bestD && dDist < 18) {
+            bestD = dDist;
+            best = n;
+          }
+        }
+
+        if (best?.id !== hoveredNodeRef.current?.id) {
+          hoveredNodeRef.current = best;
+          setHoveredNode(best);
+        }
+        viewport.style.cursor = best ? 'pointer' : 'grab';
       }
     };
 
     const handlePointerUp = (e: PointerEvent) => {
-      const prev   = cam.pointers.get(e.pointerId);
-      const moved  = prev ? Math.hypot(prev.x - e.clientX, prev.y - e.clientY) > 5 : false;
-      cam.pointers.delete(e.pointerId);
-      if (cam.pointers.size === 0) {
-        cam.pinchStartDist = 0;
-        if (!moved) { const hit = pickNode(e.clientX, e.clientY); selectedNodeRef.current = hit; setSelectedNode(hit); }
-        cam.dragMode = null;
-        canvas.style.cursor = 'grab';
+      pointers.delete(e.pointerId);
+      if (vis.drag?.moved) {
+        viewport.dataset.suppressClick = 'true';
+      }
+      
+      if (pointers.size === 1) {
+        const p = [...pointers.values()][0];
+        vis.drag = {
+          mode: 'drag',
+          x: p.x,
+          y: p.y,
+          yaw: vis.yaw,
+          pitch: vis.pitch,
+          panX: vis.panX,
+          panY: vis.panY,
+          moved: true
+        };
+      } else {
+        vis.drag = null;
+        viewport.style.cursor = 'grab';
       }
     };
 
-    canvas.addEventListener('wheel',        handleWheel,       { passive: false });
-    canvas.addEventListener('pointerdown',  handlePointerDown);
-    canvas.addEventListener('pointermove',  handlePointerMove);
-    canvas.addEventListener('pointerup',    handlePointerUp);
-    canvas.addEventListener('pointercancel',handlePointerUp);
-    canvas.addEventListener('contextmenu',  (e: Event) => e.preventDefault());
+    const handleClick = (e: MouseEvent) => {
+      if (viewport.dataset.suppressClick === 'true') {
+        viewport.dataset.suppressClick = 'false';
+        return;
+      }
+      const rect = viewport.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      const v = new THREE.Vector3();
+      let best = null;
+      let bestD = Infinity;
+
+      for (const n of vis.nodes) {
+        v.set(n.x, n.y, n.z).applyMatrix4(vis.group!.matrixWorld).project(vis.camera!);
+        if (v.z < -1 || v.z > 1) continue;
+        const sx = (v.x * 0.5 + 0.5) * rect.width;
+        const sy = (-v.y * 0.5 + 0.5) * rect.height;
+        const dDist = Math.hypot(sx - mouseX, sy - mouseY);
+        if (dDist < bestD && dDist < 18) {
+          bestD = dDist;
+          best = n;
+        }
+      }
+
+      setSelectedNode(best);
+    };
+
+    viewport.addEventListener('wheel', handleWheel, { passive: false });
+    viewport.addEventListener('pointerdown', handlePointerDown, { passive: false });
+    viewport.addEventListener('pointermove', handlePointerMove, { passive: false });
+    viewport.addEventListener('pointerup', handlePointerUp);
+    viewport.addEventListener('pointercancel', handlePointerUp);
+    viewport.addEventListener('pointerleave', handlePointerUp);
+    viewport.addEventListener('click', handleClick);
 
     return () => {
-      canvas.removeEventListener('wheel',       handleWheel);
-      canvas.removeEventListener('pointerdown', handlePointerDown);
-      canvas.removeEventListener('pointermove', handlePointerMove);
-      canvas.removeEventListener('pointerup',   handlePointerUp);
-      canvas.removeEventListener('pointercancel', handlePointerUp);
+      viewport.removeEventListener('wheel', handleWheel);
+      viewport.removeEventListener('pointerdown', handlePointerDown);
+      viewport.removeEventListener('pointermove', handlePointerMove);
+      viewport.removeEventListener('pointerup', handlePointerUp);
+      viewport.removeEventListener('pointercancel', handlePointerUp);
+      viewport.removeEventListener('pointerleave', handlePointerUp);
+      viewport.removeEventListener('click', handleClick);
     };
   }, [threeReady, loading, sceneError, data]);
 
   /* ─────────── UI handlers ─────────── */
   const togglePause = () => {
-    const next = !pausedRef.current;
-    pausedRef.current = next;
-    camRef.current.autoRotate = !next;
+    const next = !threeVisRef.current.paused;
+    threeVisRef.current.paused = next;
     setPaused(next);
   };
+  
   const togglePan = () => {
-    const next: CameraMode = camRef.current.cameraMode === 'pan' ? 'rotate' : 'pan';
-    camRef.current.cameraMode = next;
+    const next: CameraMode = threeVisRef.current.panMode ? 'rotate' : 'pan';
+    threeVisRef.current.panMode = (next === 'pan');
     setCameraMode(next);
   };
+  
   const toggleFullscreen = () => {
     const wrap = wrapRef.current;
     if (!wrap) return;
-    if (document.fullscreenElement) document.exitFullscreen();
-    else wrap.requestFullscreen?.();
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      wrap.requestFullscreen?.();
+    }
   };
 
-  const counts    = { nodes: data?.nodes?.length || 0, edges: data?.edges?.length || 0 };
-  const pal       = PALETTES[mode];
+  const counts = { nodes: data?.nodes?.length || 0, edges: data?.edges?.length || 0 };
+  const isLight = typeof document !== 'undefined' ? (document.documentElement.getAttribute('data-theme') === 'light' || document.documentElement.dataset.theme === 'light') : false;
+  const themeColors = getThemeColors(mode, isLight);
 
   // Compute connected edges for the selected node
   const connectedEdges = React.useMemo(() => {
@@ -1037,8 +1475,10 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
   };
 
   const handleSelectNeighbor = (neighborNode: SceneNode) => {
-    setSelectedNode(neighborNode);
-    selectedNodeRef.current = neighborNode;
+    const matchedNode = threeVisRef.current.nodes.find(n => n.id === neighborNode.id);
+    if (matchedNode) {
+      setSelectedNode(matchedNode);
+    }
   };
 
   /* ─────────── render ─────────── */
@@ -1107,10 +1547,11 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2.5fr) minmax(320px, 1.2fr)', gap: '16px', alignItems: 'stretch' }}>
         <div
           ref={wrapRef}
+          className="constellation-wrap"
           style={{
             position: 'relative', minHeight: '680px',
             border: `1px solid ${MG(0.1)}`, borderRadius: '6px',
-            overflow: 'hidden', background: pal.bg,
+            overflow: 'hidden', background: themeColors.bg,
           }}
         >
           {/* Error states */}
@@ -1132,34 +1573,59 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
             </div>
           ) : null}
 
-          {/* Three.js mount point — always rendered so the renderer can attach */}
+          {/* Three.js mount point */}
           <div
             ref={mountRef}
+            id="threeViewport"
             aria-label={t('visualiser.canvasLabel')}
             style={{
               width: '100%', height: '100%', minHeight: '680px',
+              position: 'relative',
               display: counts.nodes > 0 && !threeError && !sceneError ? 'block' : 'none',
             }}
-          />
+          >
+            {/* The canvas gets prepended here by WebGLRenderer */}
+            
+            {/* Fullscreen Exit Button */}
+            <button
+              id="threeExitFullscreen"
+              className="fullscreen-exit"
+              onClick={() => document.exitFullscreen()}
+            />
 
-          {/* Legend overlay */}
-          {counts.nodes > 0 && !threeError && !sceneError && (
+            {/* HTML Labels overlay */}
             <div
-              aria-label={t('visualiser.legend')}
-              style={{
-                position: 'absolute', right: '16px', bottom: '14px',
-                display: 'flex', gap: '14px', alignItems: 'center',
-                padding: '8px 10px', border: `1px solid ${MG(0.12)}`,
-                background: 'rgba(5,7,17,0.72)', borderRadius: '4px',
-                color: MG(0.72), fontSize: '11px',
-                backdropFilter: 'blur(8px)', pointerEvents: 'none',
-              }}
-            >
-              <span><span style={{ color: pal.starStr }}>●</span> {mode === 'neural' ? t('visualiser.neuronHub') : t('visualiser.entityTopic')}</span>
-              <span><span style={{ color: pal.memoryStr }}>●</span> {mode === 'neural' ? t('visualiser.memorySoma') : t('visualiser.memory')}</span>
-              <span style={{ color: MG(0.55) }}>─ {mode === 'neural' ? t('visualiser.synapse') : t('visualiser.link')}</span>
-            </div>
-          )}
+              ref={labelsRef}
+              id="threeLabels"
+              className="three-labels"
+            />
+
+            {/* Legend overlay */}
+            {counts.nodes > 0 && !threeError && !sceneError && (
+              <div
+                id="threeLegend"
+                className="constellation-legend three-legend"
+                aria-label={t('visualiser.legend')}
+                style={{
+                  pointerEvents: 'none',
+                }}
+              >
+                {mode === 'neural' ? (
+                  <>
+                    <span><i className="legend-dot entity"></i>{t('visualiser.neuronHub')}</span>
+                    <span><i className="legend-dot memory"></i>{t('visualiser.memorySoma')}</span>
+                    <span><i className="legend-line"></i>{t('visualiser.synapse')}</span>
+                  </>
+                ) : (
+                  <>
+                    <span><i className="legend-dot entity"></i>{t('visualiser.entityTopic')}</span>
+                    <span><i className="legend-dot memory"></i>{t('visualiser.memory')}</span>
+                    <span><i className="legend-line"></i>{t('visualiser.link')}</span>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Inspector Card */}
