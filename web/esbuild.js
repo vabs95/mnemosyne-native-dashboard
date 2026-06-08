@@ -121,10 +121,17 @@ esbuild.build({
   if (!fs.existsSync(destDir)) {
     fs.mkdirSync(destDir, { recursive: true });
   }
-  // Copy three.module.min.js from node_modules
-  const srcFile = path.join(__dirname, 'node_modules/three/build/three.module.min.js');
-  const destFile = path.join(destDir, 'three.module.min.js');
-  fs.copyFileSync(srcFile, destFile);
+  // Copy three.module.min.js and three.core.min.js from node_modules
+  const filesToCopy = ['three.module.min.js', 'three.core.min.js'];
+  for (const file of filesToCopy) {
+    const srcFile = path.join(__dirname, 'node_modules/three/build', file);
+    const destFile = path.join(destDir, file);
+    if (fs.existsSync(srcFile)) {
+      fs.copyFileSync(srcFile, destFile);
+    } else {
+      console.warn(`Warning: Vendor file not found: ${srcFile}`);
+    }
+  }
   console.log('Build succeeded and vendor assets copied.');
 }).catch((err) => {
   console.error('Build failed:', err);
