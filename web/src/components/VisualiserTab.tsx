@@ -602,6 +602,18 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
   const wrapRef   = useRef<HTMLDivElement>(null);
   const labelsRef = useRef<HTMLDivElement>(null);
 
+  // Dynamically load style.css when the tab mounts
+  useEffect(() => {
+    const cssHref = '/dashboard-plugins/mnemosyne-native-dashboard/dist/style.css';
+    let link = document.querySelector(`link[href="${cssHref}"]`) as HTMLLinkElement;
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = cssHref;
+      document.head.appendChild(link);
+    }
+  }, []);
+
   // Three.js states (in a ref to bypass React rendering lag / closures in loops)
   const threeVisRef = useRef({
     mode: 'constellation' as VisualiserMode,
@@ -834,9 +846,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
   const buildThreeScene = useCallback((payload: any, nextMode: VisualiserMode) => {
     const vis = threeVisRef.current;
     const THREE = vis.THREE;
-    const scene = vis.scene;
-    const group = vis.group;
-    if (!THREE || !scene || !group) return;
+    if (!THREE) return;
 
     clearScene();
 
@@ -858,6 +868,16 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
     mount.prepend(renderer.domElement);
     renderer.domElement.style.cssText = 'width:100%;height:100%;cursor:grab;display:block;position:absolute;top:0;left:0;z-index:1;';
     vis.renderer = renderer;
+
+    const scene = new THREE.Scene();
+    vis.scene = scene;
+
+    const camera = new THREE.PerspectiveCamera(
+      48,
+      (mount.clientWidth || 1000) / (mount.clientHeight || 680),
+      1, 5000,
+    );
+    vis.camera = camera;
 
     scene.background = new THREE.Color(themeColors.bg);
     scene.fog = new THREE.FogExp2(themeColors.bg, nextMode === 'neural' ? 0.0011 : 0.0009);
@@ -1042,59 +1062,9 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
         if (cancelled) return;
         const vis = threeVisRef.current;
         vis.THREE = THREE;
-
-        const mount = mountRef.current;
-        if (!mount) return;
-
-        while (mount.firstChild) {
-          if (mount.firstChild !== labelsRef.current) {
-            mount.removeChild(mount.firstChild);
-          } else {
-            break;
-          }
-        }
-
-        const isLight = document.documentElement.getAttribute('data-theme') === 'light' || document.documentElement.dataset.theme === 'light';
-        const themeColors = getThemeColors(mode, isLight);
-
-        const renderer = new THREE.WebGLRenderer({
-          antialias: true,
-          alpha: true,
-          powerPreference: 'high-performance',
-        });
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-        renderer.setSize(mount.clientWidth || 1000, mount.clientHeight || 680);
-        renderer.setClearColor(themeColors.bg, 0);
-        
-        mount.prepend(renderer.domElement);
-        renderer.domElement.style.cssText = 'width:100%;height:100%;cursor:grab;display:block;position:absolute;top:0;left:0;z-index:1;';
-        vis.renderer = renderer;
-
-        const scene = new THREE.Scene();
-        vis.scene = scene;
-
-        const camera = new THREE.PerspectiveCamera(
-          48,
-          (mount.clientWidth || 1000) / (mount.clientHeight || 680),
-          1, 5000,
-        );
-        vis.camera = camera;
-
-        const group = new THREE.Group();
-        scene.add(group);
-        vis.group = group;
-
-        const ambient = new THREE.AmbientLight(0xffffff, 0.55);
-        scene.add(ambient);
-
-        const pointLight = new THREE.PointLight(themeColors.star, 1.2, 1200);
-        pointLight.position.set(180, 220, 260);
-        scene.add(pointLight);
-
         vis.yaw = 0;
         vis.pitch = 0.32;
         vis.cameraZ = mode === 'neural' ? 600 : 760;
-
         setThreeReady(true);
       })
       .catch((err: any) => {
@@ -1128,17 +1098,18 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
   useEffect(() => {
     if (!threeReady || loading || sceneError || !data) return;
     const vis = threeVisRef.current;
-    const renderer = vis.renderer;
-    const scene = vis.scene;
-    const camera = vis.camera;
-    const group = vis.group;
-    if (!renderer || !scene || !camera || !group) return;
 
     let animFrame: number;
 
     const animate = (time: number = 0) => {
       animFrame = requestAnimationFrame(animate);
       vis.frame = animFrame;
+
+      const renderer = vis.renderer;
+      const scene = vis.scene;
+      const camera = vis.camera;
+      const group = vis.group;
+      if (!renderer || !scene || !camera || !group) return;
 
       const delta = vis.lastT ? Math.min(48, time - vis.lastT) : 16;
       vis.lastT = time;
@@ -1229,7 +1200,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
 
     animate(0);
     return () => cancelAnimationFrame(animFrame);
-  }, [threeReady, loading, sceneError, data]);
+  }, [threeReady, loading, sceneError, data, mode]);
 
   /* ─────────── pointer / wheel interaction ─────────── */
   useEffect(() => {
@@ -1417,7 +1388,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
       viewport.removeEventListener('pointerleave', handlePointerUp);
       viewport.removeEventListener('click', handleClick);
     };
-  }, [threeReady, loading, sceneError, data]);
+  }, [threeReady, loading, sceneError, data, mode]);
 
   /* ─────────── UI handlers ─────────── */
   const togglePause = () => {
