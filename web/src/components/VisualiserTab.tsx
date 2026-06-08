@@ -24,7 +24,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type * as THREEns from 'three'; // type-only — zero runtime bytes
-import { fetchJSON, Button, Badge } from '@hermes/sdk';
+import { fetchJSON, Button, Badge, Card, CardHeader, CardTitle, CardContent } from '@hermes/sdk';
 import { safeNumber } from '../utils/format';
 import { t } from '../utils/i18n';
 import { getThree, type ThreeModule } from '../utils/threeLoader';
@@ -33,6 +33,12 @@ import { getThree, type ThreeModule } from '../utils/threeLoader';
 
 const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
+const VERACITY_COLOR: Record<string, string> = {
+  stated: '#065f46',
+  inferred: '#1e3a8a',
+  tool: '#581c87',
+  imported: '#78350f',
+};
 const MIN_ZOOM = 0.45;
 const MAX_ZOOM = 4.0;
 const FOV_CONST  = 52;
@@ -337,6 +343,28 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
   useEffect(() => { pausedRef.current   = paused;        }, [paused]);
   useEffect(() => { selectedNodeRef.current = selectedNode; }, [selectedNode]);
   useEffect(() => { hoveredNodeRef.current  = hoveredNode;  }, [hoveredNode]);
+
+  const [selectedMemoryDetail, setSelectedMemoryDetail] = useState<any>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+
+  useEffect(() => {
+    if (selectedNode && selectedNode.kind === 'memory' && selectedNode.memory_id) {
+      setLoadingDetail(true);
+      fetchJSON(`${API}/memory?id=${selectedNode.memory_id}`)
+        .then((res: any) => {
+          setSelectedMemoryDetail(res.item || null);
+        })
+        .catch(() => {
+          setSelectedMemoryDetail(null);
+        })
+        .finally(() => {
+          setLoadingDetail(false);
+        });
+    } else {
+      setSelectedMemoryDetail(null);
+      setLoadingDetail(false);
+    }
+  }, [selectedNode]);
 
   /* ─────────── lazy-load Three.js + init renderer ─────────── */
   useEffect(() => {
@@ -979,46 +1007,104 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
 
   const counts    = { nodes: data?.nodes?.length || 0, edges: data?.edges?.length || 0 };
   const pal       = PALETTES[mode];
-  const activeNode = selectedNode || hoveredNode;
+
+  // Compute connected edges for the selected node
+  const connectedEdges = React.useMemo(() => {
+    if (!selectedNode || !data?.edges) return [];
+    return data.edges
+      .filter((e: any) => e.source === selectedNode.id || e.target === selectedNode.id)
+      .map((e: any) => {
+        const neighborId = e.source === selectedNode.id ? e.target : e.source;
+        const neighbor = data.nodes.find((n: any) => n.id === neighborId);
+        return {
+          edgeId: e.id,
+          label: e.label || e.kind || 'connected',
+          kind: e.kind,
+          neighbor: neighbor,
+          item: e.item
+        };
+      })
+      .filter((ce: any) => ce.neighbor !== undefined);
+  }, [selectedNode, data]);
+
+  const getRelationshipStrength = (ce: any) => {
+    if (ce.item) {
+      if (ce.item.confidence !== undefined) return safeNumber(ce.item.confidence, 2);
+      if (ce.item.importance !== undefined) return safeNumber(ce.item.importance, 2);
+    }
+    if (ce.neighbor && ce.neighbor.weight !== undefined) return safeNumber(ce.neighbor.weight, 2);
+    return '0.80';
+  };
+
+  const handleSelectNeighbor = (neighborNode: SceneNode) => {
+    setSelectedNode(neighborNode);
+    selectedNodeRef.current = neighborNode;
+  };
 
   /* ─────────── render ─────────── */
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: '16px', borderBottom: `1px solid ${MG(0.1)}` }}>
         <div>
-          <div style={{ fontSize: '15px', fontWeight: 600 }}>{t('visualiser.workspaceTitle')}</div>
-          <div style={{ fontSize: '12px', color: MG(0.45), marginTop: '4px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            {t('visualiser.workspaceSubtitle')}
-          </div>
+          <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px' }}>{t('visualiser.title')}</div>
+          <div style={{ fontSize: '12px', color: MG(0.45) }}>{t('visualiser.subtitle')}</div>
         </div>
-        <Badge>{counts.nodes} {t('visualiser.nodes')} · {counts.edges} {t('visualiser.edges')}</Badge>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {/* Mode Switcher */}
+          <div style={{ display: 'flex', gap: '2px', background: MG(0.05), padding: '2px', borderRadius: '6px' }}>
+            <Button
+              primary={mode === 'constellation'}
+              ghost={mode !== 'constellation'}
+              style={{ padding: '4px 10px', height: '28px', fontSize: '11px' }}
+              onClick={() => setMode('constellation')}
+            >
+              {t('visualiser.constellationMode')}
+            </Button>
+            <Button
+              primary={mode === 'neural'}
+              ghost={mode !== 'neural'}
+              style={{ padding: '4px 10px', height: '28px', fontSize: '11px' }}
+              onClick={() => setMode('neural')}
+            >
+              {t('visualiser.neuralMode')}
+            </Button>
+          </div>
+
+          <Badge>{counts.nodes} {t('visualiser.nodes')} · {counts.edges} {t('visualiser.edges')}</Badge>
+        </div>
       </div>
 
-      {/* Mode switcher */}
-      <div style={{ display: 'flex', gap: '10px', padding: '12px', border: `1px solid ${MG(0.09)}`, borderRadius: '6px', background: MG(0.03), flexWrap: 'wrap' }}>
-        <Button primary={mode === 'constellation'} ghost={mode !== 'constellation'} onClick={() => setMode('constellation')}>
-          {t('visualiser.constellationMode')}
-        </Button>
-        <Button primary={mode === 'neural'} ghost={mode !== 'neural'} onClick={() => setMode('neural')}>
-          {t('visualiser.neuralMode')}
-        </Button>
-      </div>
-
-      {/* Controls */}
-      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', padding: '12px', border: `1px solid ${MG(0.09)}`, borderRadius: '6px', background: MG(0.03), flexWrap: 'wrap' }}>
-        <Button primary onClick={fetchConstellation}>{t('visualiser.refresh')}</Button>
-        <Button ghost onClick={() => resetView()}>{t('visualiser.resetView')}</Button>
-        <Button ghost onClick={togglePan}>{cameraMode === 'pan' ? t('visualiser.rotateMode') : t('visualiser.panMode')}</Button>
-        <Button ghost onClick={togglePause}>{paused ? t('visualiser.resume') : mode === 'neural' ? t('visualiser.pauseDrift') : t('visualiser.pauseRotation')}</Button>
-        <Button ghost onClick={toggleFullscreen}>{t('visualiser.fullscreen')}</Button>
-        <span style={{ fontSize: '12px', color: MG(0.45) }}>
+      {/* Unified Action Toolbar */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '12px 16px',
+        border: `1px solid ${MG(0.1)}`,
+        borderRadius: '4px',
+        background: 'rgba(234,234,234,0.04)',
+        flexWrap: 'wrap',
+        gap: '12px'
+      }}>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <Button onClick={fetchConstellation}>{t('visualiser.refresh')}</Button>
+          <Button ghost onClick={() => resetView()}>{t('visualiser.resetView')}</Button>
+          <Button ghost onClick={togglePan}>
+            {cameraMode === 'pan' ? t('visualiser.rotateMode') : t('visualiser.panMode')}
+          </Button>
+          <Button ghost onClick={togglePause}>
+            {paused ? t('visualiser.resume') : mode === 'neural' ? t('visualiser.pauseDrift') : t('visualiser.pauseRotation')}
+          </Button>
+          <Button ghost onClick={toggleFullscreen}>{t('visualiser.fullscreen')}</Button>
+        </div>
+        <span style={{ fontSize: '11px', color: MG(0.45), fontFamily: 'var(--theme-font-sans)' }}>
           {mode === 'neural' ? t('visualiser.neuralHelp') : t('visualiser.constellationHelp')}
         </span>
       </div>
 
       {/* Canvas + Inspector */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2.5fr) minmax(280px, 1fr)', gap: '16px', alignItems: 'stretch' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2.5fr) minmax(320px, 1.2fr)', gap: '16px', alignItems: 'stretch' }}>
         <div
           ref={wrapRef}
           style={{
@@ -1076,44 +1162,147 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
           )}
         </div>
 
-        {/* Inspector */}
-        <aside style={{ border: `1px solid ${MG(0.1)}`, borderRadius: '6px', background: MG(0.02), minHeight: '680px' }}>
-          <div style={{ padding: '18px 20px', borderBottom: `1px solid ${MG(0.08)}` }}>
+        {/* Inspector Card */}
+        <Card style={{ minHeight: '680px', display: 'flex', flexDirection: 'column', background: MG(0.01) }}>
+          <CardHeader style={{ padding: '18px 20px', borderBottom: `1px solid ${MG(0.08)}` }}>
             <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.14em', color: MG(0.45), fontWeight: 700 }}>
               {mode === 'neural' ? t('visualiser.neuralInspector') : t('visualiser.constellationInspector')}
             </div>
-            <div style={{ fontSize: '24px', fontWeight: 700, marginTop: '12px' }}>
-              {activeNode ? activeNode.label : t('visualiser.nothingSelected')}
-            </div>
-          </div>
-          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            {activeNode ? (
+            <CardTitle style={{ fontSize: '15px', fontWeight: 600, marginTop: '10px', lineHeight: 1.4 }}>
+              {selectedNode ? (selectedNode.kind === 'memory' ? 'Memory Record' : labelForDisplay(selectedNode.label)) : t('visualiser.nothingSelected')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '18px', flex: 1, overflowY: 'auto' }}>
+            {selectedNode ? (
               <>
-                <div style={{ color: MG(0.5), fontSize: '12px', lineHeight: 1.6 }}>
-                  {activeNode.category || t('common.unknown')} · {Number(activeNode.count || 0).toLocaleString()} {t('visualiser.signals')} · {t('visualiser.weight')} {safeNumber(activeNode.weight, 2, 'n/a')}
+                {/* Node Preview / Content */}
+                <div style={{ fontSize: '13px', lineHeight: 1.55, color: MG(0.85), padding: '12px', border: `1px solid ${MG(0.08)}`, background: MG(0.03), borderRadius: '4px' }}>
+                  {selectedNode.kind === 'memory' ? (selectedNode.preview || selectedNode.label) : labelForDisplay(selectedNode.label)}
                 </div>
-                {activeNode.preview && (
-                  <div style={{ fontSize: '13px', lineHeight: 1.55, color: MG(0.74), padding: '12px', border: `1px solid ${MG(0.08)}`, background: MG(0.03), borderRadius: '4px' }}>
-                    {activeNode.preview}
+
+                {/* Entity Hub (Memory metadata) */}
+                {selectedNode.kind === 'memory' && (
+                  <div>
+                    <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: MG(0.45), marginBottom: '8px', fontWeight: 600 }}>
+                      Entity Hub
+                    </div>
+                    {loadingDetail ? (
+                      <div style={{ fontSize: '12px', color: MG(0.4) }}>Loading metadata...</div>
+                    ) : selectedMemoryDetail ? (
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: '10px',
+                        fontSize: '11px',
+                        background: MG(0.02),
+                        padding: '10px',
+                        borderRadius: '4px',
+                        border: `1px solid ${MG(0.05)}`
+                      }}>
+                        <div>
+                          <span style={{ color: MG(0.4) }}>Source: </span>
+                          <span style={{ color: MG(0.8) }} title={selectedMemoryDetail.source}>{shortLabel(selectedMemoryDetail.source || 'unknown', 14)}</span>
+                        </div>
+                        <div>
+                          <span style={{ color: MG(0.4) }}>Scope: </span>
+                          <span style={{ color: MG(0.8) }}>{selectedMemoryDetail.scope || 'unknown'}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span style={{ color: MG(0.4) }}>Veracity: </span>
+                          <Badge style={{ background: VERACITY_COLOR[String(selectedMemoryDetail.veracity).toLowerCase()] || MG(0.1), padding: '2px 6px', fontSize: '9px' }}>
+                            {selectedMemoryDetail.veracity}
+                          </Badge>
+                        </div>
+                        <div>
+                          <span style={{ color: MG(0.4) }}>Imp: </span>
+                          <span style={{ color: MG(0.8), fontWeight: 600 }}>{safeNumber(selectedMemoryDetail.importance, 2, 'n/a')}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '12px', color: MG(0.4) }}>Metadata unavailable.</div>
+                    )}
                   </div>
                 )}
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  <Badge>{activeNode.kind || t('common.unknown')}</Badge>
-                  <Badge>{activeNode.category || t('common.unknown')}</Badge>
+
+                {/* Connected Edges */}
+                <div>
+                  <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: MG(0.45), marginBottom: '8px', fontWeight: 600 }}>
+                    Connected Edges
+                  </div>
+                  {connectedEdges.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '280px', overflowY: 'auto' }}>
+                      {connectedEdges.map((ce: any) => (
+                        <div
+                          key={ce.edgeId}
+                          onClick={() => handleSelectNeighbor(ce.neighbor)}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: '8px 10px',
+                            borderRadius: '4px',
+                            background: MG(0.03),
+                            border: `1px solid ${MG(0.06)}`,
+                            cursor: 'pointer',
+                            fontSize: '11px',
+                            transition: 'background 0.15s, border-color 0.15s'
+                          }}
+                          onMouseEnter={(e: any) => {
+                            e.currentTarget.style.background = MG(0.07);
+                            e.currentTarget.style.borderColor = MG(0.12);
+                          }}
+                          onMouseLeave={(e: any) => {
+                            e.currentTarget.style.background = MG(0.03);
+                            e.currentTarget.style.borderColor = MG(0.06);
+                          }}
+                        >
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                            <span style={{ fontWeight: 600, color: MG(0.85), overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {ce.neighbor.kind === 'memory' ? 'Memory Record' : labelForDisplay(ce.neighbor.label)}
+                            </span>
+                            <span style={{ fontSize: '9px', color: MG(0.45) }}>
+                              {ce.label} ({ce.neighbor.kind || 'unknown'})
+                            </span>
+                          </div>
+                          <Badge style={{ background: MG(0.08), color: MG(0.6) }}>
+                            {getRelationshipStrength(ce)}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '11px', color: MG(0.4), fontStyle: 'italic' }}>
+                      No semantic connections.
+                    </div>
+                  )}
                 </div>
-                {activeNode.memory_id && (
-                  <Button primary onClick={() => onInspectMemory(activeNode.memory_id!)}>
-                    {t('visualiser.openMemory')}
-                  </Button>
+
+                {selectedNode.memory_id && (
+                  <div style={{ marginTop: 'auto', paddingTop: '10px' }}>
+                    <Button primary style={{ width: '100%' }} onClick={() => onInspectMemory(selectedNode.memory_id!)}>
+                      {t('visualiser.openMemory')}
+                    </Button>
+                  </div>
                 )}
               </>
             ) : (
-              <div style={{ color: MG(0.45), fontSize: '13px', lineHeight: 1.6 }}>
-                {mode === 'neural' ? t('visualiser.neuralPickPrompt') : t('visualiser.constellationPickPrompt')}
+              <div style={{ display: 'grid', placeItems: 'center', height: '100%', minHeight: '220px' }}>
+                <div style={{
+                  textAlign: 'center',
+                  fontSize: '12px',
+                  color: MG(0.35),
+                  padding: '24px 20px',
+                  border: `1px dashed ${MG(0.15)}`,
+                  borderRadius: '6px',
+                  background: MG(0.005),
+                  width: '100%'
+                }}>
+                  {mode === 'neural' ? t('visualiser.neuralPickPrompt') : t('visualiser.constellationPickPrompt')}
+                </div>
               </div>
             )}
-          </div>
-        </aside>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Cluster badges */}

@@ -79,30 +79,100 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
       const q = encodeURIComponent(queryStr.trim());
       const data = await fetchJSON(`/api/plugins/mnemosyne-native-dashboard/graph?q=${q}&limit=300`);
       
-      // Calculate layout coordinates deterministically
+      // Calculate layout coordinates using a force-directed (Fruchterman-Reingold) simulation
       const w = 1000;
       const h = 650;
       const cx = w / 2;
       const cy = h / 2;
-      const r = 260;
 
       const nodesList: Node[] = (data.nodes || []).slice(0, 160);
-      const mappedNodes = nodesList.map((n: Node, i: number, arr: Node[]) => {
-        const angle = (i / arr.length) * Math.PI * 2;
-        const radiusFactor = 0.65 + ((i % 5) / 10);
-        return {
+      const nodeMap = new Map<string, any>();
+      
+      // Initialize nodes with a spiral pattern to prevent overlays
+      nodesList.forEach((n, idx) => {
+        const angle = idx * 0.15 * Math.PI;
+        const radius = 25 + idx * 2.2;
+        nodeMap.set(n.id, {
           ...n,
-          x: cx + Math.cos(angle) * r * radiusFactor,
-          y: cy + Math.sin(angle) * r * radiusFactor
-        };
+          x: cx + Math.cos(angle) * radius,
+          y: cy + Math.sin(angle) * radius,
+          vx: 0,
+          vy: 0
+        });
       });
-
-      const nodeMap = new Map<string, Node>();
-      mappedNodes.forEach(node => nodeMap.set(node.id, node));
 
       const filteredEdges = (data.edges || []).filter((e: Edge) => 
         nodeMap.has(e.source) && nodeMap.has(e.target)
       ).slice(0, 300);
+
+      // Force-directed layout parameters
+      const iterations = 150;
+      const k = Math.sqrt((w * h) / (nodesList.length || 1)) * 0.72; // Optimal spacing distance
+
+      for (let iter = 0; iter < iterations; iter++) {
+        // 1. Repulsive forces (nodes push away from each other)
+        for (let i = 0; i < nodesList.length; i++) {
+          const n1 = nodeMap.get(nodesList[i].id);
+          for (let j = i + 1; j < nodesList.length; j++) {
+            const n2 = nodeMap.get(nodesList[j].id);
+            const dx = n1.x - n2.x;
+            const dy = n1.y - n2.y;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            if (dist < 320) {
+              const force = (k * k) / dist * 0.45;
+              const fx = (dx / dist) * force;
+              const fy = (dy / dist) * force;
+              n1.vx += fx;
+              n1.vy += fy;
+              n2.vx -= fx;
+              n2.vy -= fy;
+            }
+          }
+        }
+
+        // 2. Attractive forces (connected nodes pull together)
+        for (const edge of filteredEdges) {
+          const n1 = nodeMap.get(edge.source);
+          const n2 = nodeMap.get(edge.target);
+          const dx = n1.x - n2.x;
+          const dy = n1.y - n2.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const force = (dist * dist) / k * 0.16;
+          const fx = (dx / dist) * force;
+          const fy = (dy / dist) * force;
+          n1.vx -= fx;
+          n1.vy -= fy;
+          n2.vx += fx;
+          n2.vy += fy;
+        }
+
+        // 3. Central gravity + position updates with cooling temperature
+        const temp = 1.0 - (iter / iterations);
+        for (const n of nodeMap.values()) {
+          const dx = n.x - cx;
+          const dy = n.y - cy;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          n.vx -= (dx / dist) * 0.08 * k;
+          n.vy -= (dy / dist) * 0.08 * k;
+
+          const vel = Math.sqrt(n.vx * n.vx + n.vy * n.vy) || 1;
+          const maxDisp = 16 * temp;
+          const disp = Math.min(maxDisp, vel);
+          
+          n.x += (n.vx / vel) * disp;
+          n.y += (n.vy / vel) * disp;
+
+          // Keep nodes inside viewport with some padding
+          n.x = Math.max(35, Math.min(w - 35, n.x));
+          n.y = Math.max(35, Math.min(h - 35, n.y));
+
+          // Reset force accumulators
+          n.vx = 0;
+          n.vy = 0;
+        }
+      }
+
+      const mappedNodes = nodesList.map(n => nodeMap.get(n.id) as Node);
 
       setGraphData(data);
       setProcessedNodes(mappedNodes);
