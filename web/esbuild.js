@@ -100,6 +100,8 @@ const threeVendorPlugin = {
   },
 };
 
+const fs = require('fs');
+
 // Build frontend asset bundle
 esbuild.build({
   entryPoints: [path.join(__dirname, 'src/index.tsx')],
@@ -114,7 +116,17 @@ esbuild.build({
     '.css': 'css',
   },
 }).then(() => {
-  console.log('Build succeeded.');
-}).catch(() => {
+  // Ensure the vendor destination folder exists
+  const destDir = path.join(__dirname, '../dashboard/dist/vendor');
+  if (!fs.existsSync(destDir)) {
+    fs.mkdirSync(destDir, { recursive: true });
+  }
+  // Copy three.module.min.js from node_modules
+  const srcFile = path.join(__dirname, 'node_modules/three/build/three.module.min.js');
+  const destFile = path.join(destDir, 'three.module.min.js');
+  fs.copyFileSync(srcFile, destFile);
+  console.log('Build succeeded and vendor assets copied.');
+}).catch((err) => {
+  console.error('Build failed:', err);
   process.exit(1);
 });

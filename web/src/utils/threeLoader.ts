@@ -21,11 +21,23 @@ export function getThree(): Promise<ThreeModule> {
   if (_cached) return Promise.resolve(_cached);
   if (_pending) return _pending;
 
-  // Dynamic import to the absolute vendor path — esbuild leaves absolute-path
-  // imports as native browser import() calls and does not attempt to bundle them.
+  let vendorPath = '/dashboard-plugins/mnemosyne-native-dashboard/dist/vendor/three.module.min.js';
+  const currentScript = typeof document !== 'undefined' ? (document.currentScript as HTMLScriptElement) : null;
+  if (currentScript && currentScript.src) {
+    try {
+      vendorPath = new URL('./vendor/three.module.min.js', currentScript.src).pathname;
+    } catch (e) {
+      // fallback
+    }
+  }
+
+  const staticPath = '/static/vendor/three.module.min.js';
   _pending = (
-    import('/static/vendor/three.module.min.js' as any) as Promise<ThreeModule>
-  ).then((mod) => {
+    import(vendorPath as any) as Promise<ThreeModule>
+  ).catch(() => {
+    // If the plugin-relative path fails or returns non-JS, try the platform-wide static vendor path
+    return import(staticPath as any) as Promise<ThreeModule>;
+  }).then((mod) => {
     _cached = mod;
     _pending = null;
     return mod;
