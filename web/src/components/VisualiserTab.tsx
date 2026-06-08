@@ -577,7 +577,7 @@ function addNeuralDendrites(THREE: ThreeModule, group: THREEns.Group, nodes: any
 
 function neuralAuraOverlay(regions: any[]) {
   const regionList = (regions || []).slice(0, 9);
-  return `<div class="three-aura-layer">${regionList.map((r: any) => `<span class="three-aura-oval" data-region="${esc(r.label || '')}" style="opacity:0;transform:translate(-50%,-50%) rotate(${(Number(r.angle || 0) * 28).toFixed(1)}deg)"></span>`).join('')}</div>`;
+  return `<div class="three-aura-layer-container">${regionList.map((r: any) => `<span class="three-aura-oval-item" data-region="${esc(r.label || '')}" style="opacity:0;transform:translate(-50%,-50%) rotate(${(Number(r.angle || 0) * 28).toFixed(1)}deg)"></span>`).join('')}</div>`;
 }
 
 function visualiserResponsiveFill(width: number, height: number) {
@@ -601,18 +601,6 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
   const mountRef  = useRef<HTMLDivElement>(null);
   const wrapRef   = useRef<HTMLDivElement>(null);
   const labelsRef = useRef<HTMLDivElement>(null);
-
-  // Dynamically load style.css when the tab mounts
-  useEffect(() => {
-    const cssHref = '/dashboard-plugins/mnemosyne-native-dashboard/dist/style.css';
-    let link = document.querySelector(`link[href="${cssHref}"]`) as HTMLLinkElement;
-    if (!link) {
-      link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = cssHref;
-      document.head.appendChild(link);
-    }
-  }, []);
 
   // Three.js states (in a ref to bypass React rendering lag / closures in loops)
   const threeVisRef = useRef({
@@ -715,7 +703,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
     if (vis.mode !== 'neural' || !labelsRef.current) return;
     const mobile = rect.width < 520;
     
-    labelsRef.current.querySelectorAll<HTMLSpanElement>('.three-aura-oval').forEach((el) => {
+    labelsRef.current.querySelectorAll<HTMLSpanElement>('.three-aura-oval-item').forEach((el) => {
       const region = el.dataset.region || '';
       const pts = vis.nodes.filter((n: any) => n.neuralRegion === region);
       const screens: { x: number; y: number }[] = [];
@@ -771,7 +759,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
       : (rect.width < 520 ? (12 + Math.round(zoomReveal * 12)) : (20 + Math.round(zoomReveal * 18)));
       
     let shown = 0;
-    labelsRef.current.querySelectorAll<HTMLSpanElement>('.three-label').forEach((el, i) => {
+    labelsRef.current.querySelectorAll<HTMLSpanElement>('.three-label-item').forEach((el, i) => {
       const n = vis.labels[i];
       if (!n) return;
       v.set(n.x, n.y, n.z).applyMatrix4(vis.group!.matrixWorld).project(vis.camera!);
@@ -1014,7 +1002,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
 
     if (labelsRef.current) {
       labelsRef.current.innerHTML = neuralAuraOverlay(vis.neuralRegions) + labelNodes.map((n: any, i: number) => {
-        return `<span class="three-label ${n.kind === 'memory' ? 'memory' : ''}" data-i="${i}">${esc(String(n.label || '').replace(/^memory:/, 'mem ').slice(0, 24))}</span>`;
+        return `<span class="three-label-item ${n.kind === 'memory' ? 'memory' : ''}" data-i="${i}">${esc(String(n.label || '').replace(/^memory:/, 'mem ').slice(0, 24))}</span>`;
       }).join('');
     }
   }, [clearScene]);
@@ -1455,6 +1443,163 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
   /* ─────────── render ─────────── */
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <style dangerouslySetInnerHTML={{ __html: `
+        .constellation-wrap .three-labels-container {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          z-index: 2;
+          overflow: hidden;
+        }
+        .constellation-wrap .three-label-item {
+          position: absolute;
+          z-index: 2;
+          transform: translate(-50%, -50%);
+          padding: 3px 6px;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 700;
+          white-space: nowrap;
+          transition: opacity 0.55s ease, transform 0.55s ease;
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+        }
+        /* Dark Theme */
+        html:not([data-theme="light"]) .constellation-wrap .three-label-item {
+          background: rgba(4, 7, 14, 0.46);
+          border: 1px solid rgba(255, 255, 255, 0.10);
+          color: rgba(247, 248, 255, 0.82);
+          text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
+        }
+        html:not([data-theme="light"]) .constellation-wrap .three-label-item.memory {
+          color: #ffd6bd;
+          border-color: rgba(255, 155, 106, 0.18);
+        }
+        /* Light Theme */
+        html[data-theme="light"] .constellation-wrap .three-label-item {
+          background: rgba(255, 255, 255, 0.80);
+          border: 1px solid rgba(61, 52, 44, 0.16);
+          color: rgba(37, 34, 32, 0.86);
+          box-shadow: 0 8px 18px rgba(60, 48, 36, 0.08);
+        }
+        html[data-theme="light"] .constellation-wrap .three-label-item.memory {
+          color: #c63e35;
+          border-color: rgba(198, 62, 53, 0.18);
+        }
+
+        .constellation-wrap .three-aura-layer-container {
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+          pointer-events: none;
+          overflow: hidden;
+        }
+        .constellation-wrap .three-aura-oval-item {
+          position: absolute;
+          display: block;
+          border-radius: 50%;
+          background: radial-gradient(ellipse at center, rgba(102, 232, 198, 0.15) 0%, rgba(102, 232, 198, 0.09) 48%, rgba(102, 232, 198, 0.025) 78%, transparent 100%);
+          border: 1px solid rgba(102, 232, 198, 0.08);
+          box-shadow: inset 0 0 28px rgba(102, 232, 198, 0.06), 0 0 24px rgba(102, 232, 198, 0.04);
+          mix-blend-mode: screen;
+          transition: left 0.12s linear, top 0.12s linear, width 0.12s linear, height 0.12s linear, opacity 0.12s linear;
+        }
+        .constellation-wrap .three-aura-oval-item::after {
+          content: "";
+          position: absolute;
+          inset: 20%;
+          border-radius: 50%;
+          border: 1px solid rgba(165, 255, 229, 0.07);
+        }
+
+        /* Fullscreen styles */
+        .constellation-wrap:fullscreen {
+          width: 100vw !important;
+          height: 100vh !important;
+          min-height: 100vh !important;
+          border-radius: 0 !important;
+          border: 0 !important;
+          box-shadow: none;
+          background: #050711;
+        }
+        html[data-theme="light"] .constellation-wrap:fullscreen {
+          background: #fbf8f3;
+        }
+        .constellation-wrap:fullscreen canvas {
+          width: 100% !important;
+          height: 100% !important;
+        }
+        .constellation-wrap:fullscreen .three-legend {
+          left: 22px;
+          right: 22px;
+          bottom: 18px;
+        }
+        .constellation-wrap:fullscreen .three-labels-container {
+          inset: 0;
+        }
+
+        /* Legend dot styles */
+        .constellation-wrap .three-legend {
+          position: absolute;
+          bottom: 12px;
+          left: 12px;
+          display: flex;
+          gap: 12px;
+          font-size: 10px;
+          color: rgba(255, 255, 255, 0.6);
+          background: rgba(0, 0, 0, 0.4);
+          padding: 4px 8px;
+          border-radius: 4px;
+          font-family: monospace;
+        }
+        html[data-theme="light"] .constellation-wrap .three-legend {
+          color: rgba(0, 0, 0, 0.6);
+          background: rgba(255, 255, 255, 0.6);
+        }
+        .constellation-wrap .three-legend span {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .constellation-wrap .legend-dot {
+          display: inline-block;
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+        }
+        .constellation-wrap .legend-dot.entity {
+          background: #65d6ff;
+        }
+        .constellation-wrap .legend-dot.memory {
+          background: #ffe08a;
+        }
+        html[data-theme="light"] .constellation-wrap .legend-dot.entity {
+          background: #087fa6;
+        }
+        html[data-theme="light"] .constellation-wrap .legend-dot.memory {
+          background: #c9a96e;
+        }
+        .constellation-wrap .legend-line {
+          display: inline-block;
+          width: 12px;
+          height: 1px;
+          background: rgba(255, 255, 255, 0.4);
+        }
+        html[data-theme="light"] .constellation-wrap .legend-line {
+          background: rgba(0, 0, 0, 0.3);
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 760px), (max-width: 940px) and (max-height: 520px) {
+          .constellation-wrap {
+            min-height: 430px !important;
+          }
+          .constellation-wrap .three-label-item {
+            font-size: 10px;
+            padding: 2px 5px;
+          }
+        }
+      ` }} />
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: '16px', borderBottom: `1px solid ${MG(0.1)}` }}>
         <div>
@@ -1568,7 +1713,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
             <div
               ref={labelsRef}
               id="threeLabels"
-              className="three-labels"
+              className="three-labels-container"
             />
 
             {/* Legend overlay */}
