@@ -37,7 +37,7 @@ const hermesSdkPlugin = {
         export const authedFetch = sdk.authedFetch;
         export const buildWsUrl = sdk.buildWsUrl;
         export const useI18n = sdk.useI18n;
-        
+
         // Components
         export const Card = sdk.components.Card;
         export const CardHeader = sdk.components.CardHeader;
@@ -55,11 +55,46 @@ const hermesSdkPlugin = {
         export const TabsList = sdk.components.TabsList;
         export const TabsTrigger = sdk.components.TabsTrigger;
         export const PluginSlot = sdk.components.PluginSlot;
-        
+
         // Utils
         export const cn = sdk.utils.cn;
         export const timeAgo = sdk.utils.timeAgo;
         export const isoTimeAgo = sdk.utils.isoTimeAgo;
+      `,
+    }));
+  },
+};
+
+/**
+ * Three.js vendor plugin.
+ *
+ * Any static `import ... from 'three'` in source files is intercepted and
+ * replaced with an empty stub at bundle time. Three.js is intentionally NOT
+ * bundled into the plugin output.
+ *
+ * The real Three.js is loaded lazily at runtime by threeLoader.ts via
+ *   import('/static/vendor/three.module.min.js')
+ * — an absolute-path dynamic import that esbuild leaves as a native browser
+ * import() call and does not attempt to bundle.
+ *
+ * Result: Three.js (~540 KB) is absent from dist/index.js and is only fetched
+ * the first time the user opens the Visualiser tab. The browser then caches it,
+ * so subsequent visits (or other tabs that also use it) pay zero cost.
+ */
+const threeVendorPlugin = {
+  name: 'three-vendor',
+  setup(build) {
+    build.onResolve({ filter: /^three$/ }, () => ({
+      path: 'three',
+      namespace: 'three-vendor-stub',
+    }));
+    build.onLoad({ filter: /.*/, namespace: 'three-vendor-stub' }, () => ({
+      // Empty stub. All Three.js usage flows through threeLoader.ts at runtime.
+      // TypeScript types come from @types/three (devDependency) — they are
+      // erased by tsc and produce zero runtime bytes.
+      contents: `
+        // Three.js is loaded on demand from /static/vendor/three.module.min.js.
+        // See web/src/utils/threeLoader.ts.
       `,
     }));
   },
@@ -74,7 +109,7 @@ esbuild.build({
   sourcemap: false,
   format: 'iife',
   target: ['es2020'],
-  plugins: [hermesSdkPlugin],
+  plugins: [hermesSdkPlugin, threeVendorPlugin],
   loader: {
     '.css': 'css',
   },

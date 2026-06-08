@@ -1,34 +1,33 @@
 /**
- * VisualiserTab — Three.js WebGL edition
+ * VisualiserTab — Three.js WebGL edition (lazy-loaded)
  *
- * Replaces the manual 2-D canvas projection with a proper Three.js scene.
- * Every feature from the legacy canvas version is preserved:
+ * Three.js is NOT bundled. It is loaded on demand from the platform vendor
+ * file (/static/vendor/three.module.min.js) the first time this tab is opened,
+ * via threeLoader.ts. All subsequent visits reuse the browser-cached copy.
+ *
+ * Features (all preserved from the 2D canvas version):
  *   - Constellation mode  (wide orbital layout, dashed edges, star palette)
  *   - Neural map mode     (clustered layout, curved synapses, green-red palette)
- *   - Auto-rotation / drift that can be paused
+ *   - Auto-rotation / drift, pauseable
  *   - Mouse/touch rotate + pan + pinch-zoom
- *   - Scroll-wheel zoom with focal-point offset
+ *   - Scroll-wheel zoom
  *   - Node hover & click → inspector panel
  *   - Fullscreen toggle
  *   - Camera-mode toggle (rotate ↔ pan)
  *   - Reset view
  *   - Cluster / region ellipsoids (neural mode)
- *   - Background star field (instanced sprites)
- *   - Label sprites (canvas-texture billboards, collision-free culling)
- *   - Selection ring highlight
- *   - Cluster badge row at the bottom
+ *   - Background star field (shader-based points)
+ *   - Label sprites (canvas-texture billboards)
+ *   - Selection / hover ring highlight
+ *   - Cluster badge row at bottom
  */
 
-import React, {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
-import * as THREE from 'three';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import type * as THREEns from 'three'; // type-only — zero runtime bytes
 import { fetchJSON, Button, Badge } from '@hermes/sdk';
 import { safeNumber } from '../utils/format';
 import { t } from '../utils/i18n';
+import { getThree, type ThreeModule } from '../utils/threeLoader';
 
 /* ─────────────────────────────── constants ─────────────────────────── */
 
@@ -36,14 +35,9 @@ const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
 const MIN_ZOOM = 0.45;
 const MAX_ZOOM = 4.0;
-
-// Camera FOV in constellation vs. neural modes (vertical degrees)
-const FOV_CONST = 52;
+const FOV_CONST  = 52;
 const FOV_NEURAL = 46;
-
-// World-space radii
-const WORLD_CONST = 340;   // constellation outer ring radius
-
+const WORLD_CONST   = 340;
 const CAMERA_Z_CONST  = 820;
 const CAMERA_Z_NEURAL = 660;
 
@@ -65,10 +59,10 @@ interface SceneNode {
   count?: number;
   memory_id?: string;
   preview?: string;
-  wx: number;  // world-space position
+  wx: number;
   wy: number;
   wz: number;
-  radius: number;   // visual radius in world units
+  radius: number;
   twinkle: number;
   twinkleFreq: number;
   twinkleAmp: number;
@@ -81,53 +75,51 @@ interface SceneEdge {
   kind?: string;
 }
 
+interface Region {
+  label: string;
+  angle: number;
+  cx: number; cy: number; cz: number;
+  spread: number;
+}
+
 interface Palette {
   bg: string;
-  bgVec: THREE.Color;
-  core: THREE.Color;
-  star: THREE.Color;
-  memory: THREE.Color;
-  edge: THREE.Color;
-  edgeMemory: THREE.Color;
-  edgeHot: THREE.Color;
+  bgHex: number;
+  coreHex: number;
+  starHex: number;
+  memoryHex: number;
+  starStr: string;
+  memoryStr: string;
+  edgeHex: number;
+  edgeMemoryHex: number;
   text: string;
 }
 
 /* ─────────────────────────────── helpers ─────────────────────────── */
 
-const paletteFor = (mode: VisualiserMode): Palette => {
-  if (mode === 'neural') {
-    return {
-      bg:        '#06100f',
-      bgVec:     new THREE.Color(0x06100f),
-      core:      new THREE.Color(0x22826f).multiplyScalar(0.28),
-      star:      new THREE.Color(0x66e8c6),
-      memory:    new THREE.Color(0xff5f57),
-      edge:      new THREE.Color(0x52d6b5),
-      edgeMemory:new THREE.Color(0xff5f57),
-      edgeHot:   new THREE.Color(0x5aeec4),
-      text:      '#f6fbf7',
-    };
-  }
-  return {
-    bg:        '#050711',
-    bgVec:     new THREE.Color(0x050711),
-    core:      new THREE.Color(0x65d6ff).multiplyScalar(0.14),
-    star:      new THREE.Color(0x65d6ff),
-    memory:    new THREE.Color(0xffe08a),
-    edge:      new THREE.Color(0xc6e0ff),
-    edgeMemory:new THREE.Color(0xffe08a),
-    edgeHot:   new THREE.Color(0x65d6ff),
-    text:      '#f7f8ff',
-  };
+const PALETTES: Record<VisualiserMode, Palette> = {
+  constellation: {
+    bg: '#050711',   bgHex: 0x050711,
+    coreHex: 0x65d6ff,
+    starHex: 0x65d6ff, starStr: '#65d6ff',
+    memoryHex: 0xffe08a, memoryStr: '#ffe08a',
+    edgeHex: 0xc6e0ff, edgeMemoryHex: 0xffe08a,
+    text: '#f7f8ff',
+  },
+  neural: {
+    bg: '#06100f',   bgHex: 0x06100f,
+    coreHex: 0x22826f,
+    starHex: 0x66e8c6, starStr: '#66e8c6',
+    memoryHex: 0xff5f57, memoryStr: '#ff5f57',
+    edgeHex: 0x52d6b5, edgeMemoryHex: 0xff5f57,
+    text: '#f6fbf7',
+  },
 };
-
-
 
 const shortLabel = (s: string, max = 22) =>
   s.length > max ? `${s.slice(0, max - 3)}...` : s;
 
-const labelForCanvas = (raw: string) => {
+const labelForDisplay = (raw: string) => {
   const label = String(raw || '').replace(/^memory:/, 'mem ');
   return /^[A-Z][A-Z_\s-]{2,}$/.test(label)
     ? label.toLowerCase().replace(/(^|[_\s-])([a-z])/g, (_m, sep, ch) =>
@@ -137,26 +129,12 @@ const labelForCanvas = (raw: string) => {
 
 const isTechnical = (raw: string) => {
   const alpha = (raw.match(/[A-Za-z]/g) || []).length;
-  return /^[a-f0-9]{10,}$/i.test(raw) ||
-    /^mem\s+[a-f0-9]{6,}$/i.test(raw) ||
-    alpha < 4;
+  return /^[a-f0-9]{10,}$/i.test(raw) || /^mem\s+[a-f0-9]{6,}$/i.test(raw) || alpha < 4;
 };
 
-/* ─────────────────────── node layout builder ─────────────────────── */
+/* ─────────────────────── layout builder ─────────────────────── */
 
-interface Region {
-  label: string;
-  angle: number;
-  cx: number; cy: number; cz: number;
-  spread: number;
-}
-
-function buildSceneData(payload: any, mode: VisualiserMode): {
-  nodes: SceneNode[];
-  edges: SceneEdge[];
-  regions: Region[];
-  stars: { x: number; y: number; z: number; r: number; a: number; phase: number; freq: number }[];
-} {
+function buildSceneData(payload: any, mode: VisualiserMode) {
   const maxNodes = mode === 'neural' ? 170 : 160;
   const maxEdges = mode === 'neural' ? 340 : 300;
 
@@ -175,14 +153,12 @@ function buildSceneData(payload: any, mode: VisualiserMode): {
     degree.set(e.target, (degree.get(e.target) || 0) + 1);
   });
 
-  // Regions (for neural cluster hulls)
   const regions: Region[] = categories.map((cat, idx) => {
     const tPos = categories.length === 1 ? 0 : (idx / Math.max(1, categories.length - 1)) * 2 - 1;
     const angle = -Math.PI / 2 + idx * 2.399963;
     const radial = Math.sqrt(Math.max(0, 1 - tPos * tPos));
     return {
-      label: cat,
-      angle,
+      label: cat, angle,
       cx: Math.cos(angle) * radial * 230,
       cy: tPos * 150 + Math.sin(angle * 0.7) * 24,
       cz: Math.sin(angle) * radial * 190 + (idx % 2 === 0 ? -28 : 28),
@@ -193,7 +169,7 @@ function buildSceneData(payload: any, mode: VisualiserMode): {
 
   const nodes: SceneNode[] = rawNodes.map((node: any, idx: number) => {
     const cat = String(node.category || 'Other');
-    const ci = Number(catIndex[cat] || 0);
+    const ci  = Number(catIndex[cat] || 0);
     const weight = Math.max(1, Number(node.weight || node.count || 1));
     let wx = 0, wy = 0, wz = 0;
 
@@ -210,7 +186,7 @@ function buildSceneData(payload: any, mode: VisualiserMode): {
       wz = region.cz + Math.sin(angle) * radial * orbit * 0.86;
     } else {
       const angle = (idx / Math.max(rawNodes.length, 1)) * Math.PI * 2 + ci * 0.62;
-      const band = node.kind === 'memory' ? 1.28 : 0.72 + (ci % 4) * 0.16;
+      const band  = node.kind === 'memory' ? 1.28 : 0.72 + (ci % 4) * 0.16;
       const radius = WORLD_CONST * band + (idx % 7) * 16;
       wx = Math.cos(angle) * radius;
       wy = Math.sin(angle * 1.23) * (100 + (ci % 5) * 24) + (((idx * 53) % 131) - 65) * 0.82;
@@ -218,14 +194,13 @@ function buildSceneData(payload: any, mode: VisualiserMode): {
     }
 
     const deg = degree.get(node.id) || 0;
-    const sizeScale = mode === 'neural' ? 0.8 : 0.54;
-    const maxR = mode === 'neural' ? 30 : 22;
-    const baseR = mode === 'neural' ? 8 : 4;
-    const nodeRadius = Math.min(maxR, baseR + Math.sqrt(weight + deg) * (node.kind === 'memory' ? 3.2 : 4.1)) * sizeScale;
+    const nodeRadius = Math.min(
+      mode === 'neural' ? 30 : 22,
+      (mode === 'neural' ? 8 : 4) + Math.sqrt(weight + deg) * (node.kind === 'memory' ? 3.2 : 4.1),
+    ) * (mode === 'neural' ? 0.8 : 0.54);
 
     return {
-      ...node,
-      wx, wy, wz,
+      ...node, wx, wy, wz,
       radius: Math.max(4, nodeRadius),
       twinkle: (idx % 17) / 17,
       twinkleFreq: (mode === 'neural' ? 0.0017 : 0.00115) + ((idx * 31) % 90) / 100000,
@@ -235,140 +210,111 @@ function buildSceneData(payload: any, mode: VisualiserMode): {
 
   const edges: SceneEdge[] = rawEdges.map((e: any) => ({
     id: String(e.id || `${e.source}-${e.target}`),
-    source: e.source,
-    target: e.target,
-    kind: e.kind,
+    source: e.source, target: e.target, kind: e.kind,
   }));
 
   const starCount = mode === 'neural' ? 80 : 160;
-  const stars = Array.from({ length: starCount }, (_, idx) => {
-    const fast = idx % 13 === 0;
-    const spread = 1800;
-    return {
-      x: ((idx * 73) % 1000) / 1000 * spread - spread / 2,
-      y: ((idx * 191) % 680) / 680 * spread - spread / 2,
-      z: ((idx * 137) % 1000) / 1000 * spread - spread / 2,
-      r: 0.8 + ((idx * 37) % 100) / 50,
-      a: 0.12 + ((idx * 29) % 100) / (mode === 'neural' ? 340 : 240),
-      phase: ((idx * 47) % 628) / 100,
-      freq: fast ? 0.0058 + ((idx * 41) % 80) / 100000 : 0.00048 + ((idx * 41) % 95) / 100000,
-    };
-  });
+  const spread    = 1800;
+  const stars = Array.from({ length: starCount }, (_, idx) => ({
+    x: ((idx * 73)  % 1000) / 1000 * spread - spread / 2,
+    y: ((idx * 191) % 680)  / 680  * spread - spread / 2,
+    z: ((idx * 137) % 1000) / 1000 * spread - spread / 2,
+    r: 0.8 + ((idx * 37) % 100) / 50,
+    a: 0.12 + ((idx * 29) % 100) / (mode === 'neural' ? 340 : 240),
+    phase: ((idx * 47) % 628) / 100,
+    freq:  (idx % 13 === 0 ? 0.0058 : 0.00048) + ((idx * 41) % 95) / 100000,
+  }));
 
   return { nodes, edges, regions, stars };
 }
 
-/* ─────────────────────── label texture factory ─────────────────────── */
+/* ─────────── canvas-texture helpers (label + glow) ─────────── */
 
-const _labelCache = new Map<string, THREE.CanvasTexture>();
-const _labelUsage  = new Map<string, number>();
+const _texCache = new Map<string, THREEns.CanvasTexture>();
 
-function makeLabelTexture(text: string, textColor: string): THREE.CanvasTexture {
-  const key = `${text}|${textColor}`;
-  if (_labelCache.has(key)) {
-    _labelUsage.set(key, (_labelUsage.get(key) || 0) + 1);
-    return _labelCache.get(key)!;
-  }
-  const cvs = document.createElement('canvas');
-  const ctx = cvs.getContext('2d')!;
-  const fontSize = 26;
-  ctx.font = `${fontSize}px system-ui, sans-serif`;
-  const w = Math.ceil(ctx.measureText(text).width) + 24;
-  const h = fontSize + 16;
-  cvs.width  = w;
-  cvs.height = h;
-  ctx.font = `${fontSize}px system-ui, sans-serif`;
-  ctx.lineWidth = 6;
-  ctx.strokeStyle = 'rgba(0,0,0,0.82)';
-  ctx.fillStyle = textColor;
-  ctx.strokeText(text, 12, fontSize + 2);
-  ctx.fillText(text, 12, fontSize + 2);
-  const tex = new THREE.CanvasTexture(cvs);
-  tex.needsUpdate = true;
-  _labelCache.set(key, tex);
-  _labelUsage.set(key, 1);
-  return tex;
-}
-
-function disposeLabelTexture(text: string, textColor: string) {
-  const key = `${text}|${textColor}`;
-  const usage = (_labelUsage.get(key) || 0) - 1;
-  if (usage <= 0) {
-    _labelCache.get(key)?.dispose();
-    _labelCache.delete(key);
-    _labelUsage.delete(key);
-  } else {
-    _labelUsage.set(key, usage);
-  }
-}
-
-/* ─────────────────────── glow-disc texture ─────────────────────── */
-
-function makeGlowTexture(starColor: string, isMemory: boolean): THREE.CanvasTexture {
-  const key = `glow:${starColor}:${isMemory}`;
-  if (_labelCache.has(key)) return _labelCache.get(key)!;
+function makeGlowTexture(THREE: ThreeModule, color: string, isMemory: boolean): THREEns.CanvasTexture {
+  const key = `glow:${color}:${isMemory}`;
+  if (_texCache.has(key)) return _texCache.get(key)!;
   const size = 128;
   const cvs  = document.createElement('canvas');
   cvs.width = cvs.height = size;
   const ctx = cvs.getContext('2d')!;
-  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  const g   = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
   g.addColorStop(0,    'rgba(255,255,255,1)');
-  g.addColorStop(0.18, starColor);
+  g.addColorStop(0.18, color);
   g.addColorStop(0.55, isMemory ? 'rgba(255,180,80,0.35)' : 'rgba(100,200,255,0.2)');
   g.addColorStop(1,    'rgba(0,0,0,0)');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, size, size);
   const tex = new THREE.CanvasTexture(cvs);
   tex.needsUpdate = true;
-  _labelCache.set(key, tex);
-  return tex;
+  _texCache.set(key, tex as any);
+  return tex as any;
+}
+
+function makeLabelTexture(THREE: ThreeModule, text: string, textColor: string): THREEns.CanvasTexture {
+  const key = `label:${text}:${textColor}`;
+  if (_texCache.has(key)) return _texCache.get(key)!;
+  const cvs  = document.createElement('canvas');
+  const ctx  = cvs.getContext('2d')!;
+  const fs   = 26;
+  ctx.font   = `${fs}px system-ui, sans-serif`;
+  const w    = Math.ceil(ctx.measureText(text).width) + 24;
+  cvs.width  = w; cvs.height = fs + 16;
+  ctx.font   = `${fs}px system-ui, sans-serif`;
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = 'rgba(0,0,0,0.82)';
+  ctx.fillStyle   = textColor;
+  ctx.strokeText(text, 12, fs + 2);
+  ctx.fillText(text, 12, fs + 2);
+  const tex = new THREE.CanvasTexture(cvs);
+  tex.needsUpdate = true;
+  _texCache.set(key, tex as any);
+  return tex as any;
 }
 
 /* ──────────────────────────── main component ──────────────────────── */
 
 export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory }) => {
-  const mountRef      = useRef<HTMLDivElement>(null);
-  const wrapRef       = useRef<HTMLDivElement>(null);
+  const mountRef = useRef<HTMLDivElement>(null);
+  const wrapRef  = useRef<HTMLDivElement>(null);
 
-  // Three.js objects kept in refs (not state — no re-renders on frame)
-  const rendererRef   = useRef<THREE.WebGLRenderer | null>(null);
-  const sceneRef      = useRef<THREE.Scene | null>(null);
-  const cameraRef     = useRef<THREE.PerspectiveCamera | null>(null);
-  const frameRef      = useRef<number | null>(null);
-  const clockRef      = useRef<THREE.Clock>(new THREE.Clock());
+  // Three.js objects (refs — no state, no re-renders per frame)
+  const THREE_REF    = useRef<ThreeModule | null>(null);
+  const rendererRef  = useRef<THREEns.WebGLRenderer | null>(null);
+  const sceneRef     = useRef<THREEns.Scene | null>(null);
+  const cameraRef    = useRef<THREEns.PerspectiveCamera | null>(null);
+  const frameRef     = useRef<number | null>(null);
+  const clockRef     = useRef<{ start: number; last: number }>({ start: 0, last: 0 });
 
-  // Scene data (stable references across draws)
-  const nodesRef      = useRef<SceneNode[]>([]);
-  const edgesRef      = useRef<SceneEdge[]>([]);
-  const regionsRef    = useRef<Region[]>([]);
+  const nodesRef    = useRef<SceneNode[]>([]);
+  const nodeMeshes  = useRef<THREEns.Object3D[]>([]);
+  const edgeLines   = useRef<(THREEns.Line | THREEns.LineSegments)[]>([]);
+  const labelSprites= useRef<THREEns.Sprite[]>([]);
+  const regionMeshes= useRef<THREEns.Object3D[]>([]);
+  const starPoints  = useRef<THREEns.Points | null>(null);
+  const selRingRef  = useRef<THREEns.Mesh | null>(null);
+  const hovRingRef  = useRef<THREEns.Mesh | null>(null);
 
-  // Three.js objects for scene elements
-  const nodeMeshesRef = useRef<THREE.Mesh[]>([]);
-  const edgeLinesRef  = useRef<THREE.LineSegments | THREE.Line[]>([]);
-  const labelSpritesRef  = useRef<THREE.Sprite[]>([]);
-  const regionMeshesRef  = useRef<THREE.Mesh[]>([]);
-  const starMeshRef      = useRef<THREE.Points | null>(null);
-  const selectionRingRef = useRef<THREE.Mesh | null>(null);
-  const hoverRingRef     = useRef<THREE.Mesh | null>(null);
-
-  // Camera control state
-  const camStateRef = useRef({
-    spherical: new THREE.Spherical(CAMERA_Z_CONST, Math.PI / 2 - 0.34, -0.42),
-    panOffset: new THREE.Vector3(),
+  // Camera control
+  const camRef = useRef({
+    theta: -0.42, phi: Math.PI / 2 - 0.34,
+    radius: CAMERA_Z_CONST,
+    panOffset: { x: 0, y: 0, z: 0 },
     zoom: 1.0,
     autoRotate: true,
-    rotateSpeed: 0.00065,
-    dragMode: null as 'rotate' | 'pan' | null,
-    dragStart: new THREE.Vector2(),
-    dragSphStart: new THREE.Spherical(),
-    dragPanStart: new THREE.Vector3(),
-    pinchStartDist: 0,
-    pinchStartZoom: 1,
-    pointers: new Map<number, THREE.Vector2>(),
     cameraMode: 'rotate' as CameraMode,
+    dragMode: null as 'rotate' | 'pan' | null,
+    dragStartX: 0, dragStartY: 0,
+    dragThetaStart: 0, dragPhiStart: 0,
+    dragPanStart: { x: 0, y: 0, z: 0 },
+    pinchStartDist: 0, pinchStartZoom: 1,
+    pointers: new Map<number, { x: number; y: number }>(),
   });
 
-  // React state (only for UI re-renders)
+  // React state (UI redraws only)
+  const [threeReady, setThreeReady]     = useState(false);
+  const [threeError, setThreeError]     = useState('');
   const [loading, setLoading]           = useState(true);
   const [sceneError, setSceneError]     = useState('');
   const [data, setData]                 = useState<any>(null);
@@ -381,70 +327,90 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
   const [selectedNode, setSelectedNode] = useState<SceneNode | null>(null);
   const [hoveredNode, setHoveredNode]   = useState<SceneNode | null>(null);
 
-  // Keep latest in ref for use inside rAF loop
+  // Latest values accessible inside rAF without stale closures
   const modeRef         = useRef(mode);
   const pausedRef       = useRef(paused);
   const selectedNodeRef = useRef<SceneNode | null>(null);
   const hoveredNodeRef  = useRef<SceneNode | null>(null);
 
-  useEffect(() => { modeRef.current = mode; },       [mode]);
-  useEffect(() => { pausedRef.current = paused; },   [paused]);
+  useEffect(() => { modeRef.current     = mode;          }, [mode]);
+  useEffect(() => { pausedRef.current   = paused;        }, [paused]);
   useEffect(() => { selectedNodeRef.current = selectedNode; }, [selectedNode]);
   useEffect(() => { hoveredNodeRef.current  = hoveredNode;  }, [hoveredNode]);
 
-  /* ─────────── init Three.js renderer ─────────── */
+  /* ─────────── lazy-load Three.js + init renderer ─────────── */
   useEffect(() => {
-    const mount = mountRef.current;
-    if (!mount) return;
+    let cancelled = false;
+    getThree()
+      .then((THREE) => {
+        if (cancelled) return;
+        THREE_REF.current = THREE;
 
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: false,
-      powerPreference: 'high-performance',
-    });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(mount.clientWidth || 1000, mount.clientHeight || 680);
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    mount.appendChild(renderer.domElement);
-    renderer.domElement.style.width  = '100%';
-    renderer.domElement.style.height = '100%';
-    renderer.domElement.style.cursor = 'grab';
-    rendererRef.current = renderer;
+        const mount = mountRef.current;
+        if (!mount) return;
 
-    const threeScene = new THREE.Scene();
-    sceneRef.current = threeScene;
+        const renderer = new THREE.WebGLRenderer({
+          antialias: true, alpha: false, powerPreference: 'high-performance',
+        });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(mount.clientWidth || 1000, mount.clientHeight || 680);
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        mount.appendChild(renderer.domElement);
+        renderer.domElement.style.cssText = 'width:100%;height:100%;cursor:grab;display:block;';
+        rendererRef.current = renderer;
 
-    const camera = new THREE.PerspectiveCamera(FOV_CONST, (mount.clientWidth || 1000) / (mount.clientHeight || 680), 1, 6000);
-    camera.position.set(0, 0, CAMERA_Z_CONST);
-    cameraRef.current = camera;
+        const threeScene = new THREE.Scene();
+        sceneRef.current = threeScene;
 
-    // Ambient + dim directional light (helps node shading pop)
-    threeScene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
-    dirLight.position.set(200, 400, 300);
-    threeScene.add(dirLight);
+        const camera = new THREE.PerspectiveCamera(
+          FOV_CONST,
+          (mount.clientWidth || 1000) / (mount.clientHeight || 680),
+          1, 6000,
+        );
+        camera.position.set(0, 0, CAMERA_Z_CONST);
+        cameraRef.current = camera;
 
-    // Selection / hover rings (always in scene, moved to selected node)
-    const ringGeo = new THREE.RingGeometry(1.0, 1.12, 48);
-    const selMat  = new THREE.MeshBasicMaterial({ color: 0xffe08a, side: THREE.DoubleSide, transparent: true, opacity: 0.95, depthWrite: false });
-    const hovMat  = new THREE.MeshBasicMaterial({ color: 0xf7f8ff, side: THREE.DoubleSide, transparent: true, opacity: 0.72, depthWrite: false });
-    const selRing = new THREE.Mesh(ringGeo, selMat);
-    const hovRing = new THREE.Mesh(ringGeo.clone(), hovMat);
-    selRing.visible = hovRing.visible = false;
-    selRing.renderOrder = hovRing.renderOrder = 999;
-    threeScene.add(selRing, hovRing);
-    selectionRingRef.current = selRing;
-    hoverRingRef.current     = hovRing;
+        threeScene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dir = new THREE.DirectionalLight(0xffffff, 0.5);
+        dir.position.set(200, 400, 300);
+        threeScene.add(dir);
+
+        // Rings — always in scene, invisible until a node is picked
+        const ringGeo  = new THREE.RingGeometry(1.0, 1.12, 48);
+        const selRing  = new THREE.Mesh(ringGeo,
+          new THREE.MeshBasicMaterial({ color: 0xffe08a, side: THREE.DoubleSide, transparent: true, opacity: 0.95, depthWrite: false }));
+        const hovRing  = new THREE.Mesh(ringGeo.clone(),
+          new THREE.MeshBasicMaterial({ color: 0xf7f8ff, side: THREE.DoubleSide, transparent: true, opacity: 0.72, depthWrite: false }));
+        selRing.visible = hovRing.visible = false;
+        selRing.renderOrder = hovRing.renderOrder = 999;
+        threeScene.add(selRing, hovRing);
+        selRingRef.current = selRing;
+        hovRingRef.current = hovRing;
+
+        clockRef.current.start = performance.now();
+        clockRef.current.last  = 0;
+
+        setThreeReady(true);
+      })
+      .catch((err: any) => {
+        if (!cancelled) setThreeError(err?.message || 'Failed to load 3D engine');
+      });
 
     return () => {
+      cancelled = true;
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
-      renderer.dispose();
-      if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
+      const renderer = rendererRef.current;
+      const mount    = mountRef.current;
+      if (renderer) {
+        renderer.dispose();
+        if (mount && mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
+      }
       rendererRef.current = null;
       sceneRef.current    = null;
       cameraRef.current   = null;
+      THREE_REF.current   = null;
     };
-  }, []); // run once
+  }, []); // once
 
   /* ─────────── resize observer ─────────── */
   useEffect(() => {
@@ -453,16 +419,15 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
     const ro = new ResizeObserver(() => {
       const w = wrap.clientWidth  || 1000;
       const h = wrap.clientHeight || 680;
-      const renderer = rendererRef.current;
-      const camera   = cameraRef.current;
-      if (renderer) renderer.setSize(w, h, false);
-      if (camera)   { camera.aspect = w / h; camera.updateProjectionMatrix(); }
+      rendererRef.current?.setSize(w, h, false);
+      const cam = cameraRef.current;
+      if (cam) { cam.aspect = w / h; cam.updateProjectionMatrix(); }
     });
     ro.observe(wrap);
     return () => ro.disconnect();
   }, []);
 
-  /* ─────────── fetch data ─────────── */
+  /* ─────────── data fetch ─────────── */
   const fetchConstellation = useCallback(() => {
     setLoading(true);
     setSceneError('');
@@ -474,76 +439,68 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
 
   useEffect(() => { fetchConstellation(); }, []);
 
-  /* ─────────── clear Three.js scene objects ─────────── */
+  /* ─────────── clear scene objects ─────────── */
   const clearScene = useCallback(() => {
     const threeScene = sceneRef.current;
     if (!threeScene) return;
 
-    nodeMeshesRef.current.forEach(m => {
+    nodeMeshes.current.forEach(m => {
       threeScene.remove(m);
-      (m.geometry as THREE.BufferGeometry).dispose();
-      ((m.material as THREE.Material)).dispose();
+      if ('geometry' in m) (m as any).geometry?.dispose?.();
+      if ('material' in m) (m as any).material?.dispose?.();
     });
-    nodeMeshesRef.current = [];
+    nodeMeshes.current = [];
 
-    (edgeLinesRef.current as any[]).forEach(l => {
+    edgeLines.current.forEach(l => {
       threeScene.remove(l);
-      if ('geometry' in l) (l.geometry as THREE.BufferGeometry).dispose();
-      if ('material' in l) (l.material as THREE.Material).dispose();
+      l.geometry?.dispose();
+      (l.material as any)?.dispose?.();
     });
-    edgeLinesRef.current = [];
+    edgeLines.current = [];
 
-    labelSpritesRef.current.forEach(s => {
+    labelSprites.current.forEach(s => {
       threeScene.remove(s);
-      const key = (s.userData as any).labelKey as string;
-      const color = (s.userData as any).labelColor as string;
-      if (key && color) disposeLabelTexture(key, color);
-      (s.material as THREE.SpriteMaterial).dispose();
+      (s.material as any)?.dispose?.();
     });
-    labelSpritesRef.current = [];
+    labelSprites.current = [];
 
-    regionMeshesRef.current.forEach(m => {
+    regionMeshes.current.forEach(m => {
       threeScene.remove(m);
-      (m.geometry as THREE.BufferGeometry).dispose();
-      ((m.material as THREE.Material)).dispose();
+      if ('geometry' in m) (m as any).geometry?.dispose?.();
+      if ('material' in m) (m as any).material?.dispose?.();
     });
-    regionMeshesRef.current = [];
+    regionMeshes.current = [];
 
-    if (starMeshRef.current) {
-      threeScene.remove(starMeshRef.current);
-      (starMeshRef.current.geometry as THREE.BufferGeometry).dispose();
-      ((starMeshRef.current.material as THREE.Material)).dispose();
-      starMeshRef.current = null;
+    if (starPoints.current) {
+      threeScene.remove(starPoints.current);
+      starPoints.current.geometry.dispose();
+      (starPoints.current.material as any).dispose?.();
+      starPoints.current = null;
     }
   }, []);
 
-  /* ─────────── build Three.js scene from data ─────────── */
+  /* ─────────── build Three.js scene ─────────── */
   const buildThreeScene = useCallback((payload: any, nextMode: VisualiserMode) => {
+    const THREE     = THREE_REF.current;
     const threeScene = sceneRef.current;
-    if (!threeScene) return;
+    if (!THREE || !threeScene) return;
 
     clearScene();
 
     const { nodes, edges, regions, stars } = buildSceneData(payload, nextMode);
-    nodesRef.current   = nodes;
-    edgesRef.current   = edges;
-    regionsRef.current = regions;
+    nodesRef.current = nodes;
 
-    const pal = paletteFor(nextMode);
+    const pal = PALETTES[nextMode];
+    threeScene.background = new THREE.Color(pal.bgHex);
 
-    // ── background colour ──
-    threeScene.background = pal.bgVec;
-
-    // ── stars (instanced point sprites) ──
+    // ── star points (custom GLSL shader for per-point twinkling alpha) ──
     {
-      const geo = new THREE.BufferGeometry();
-      const pos = new Float32Array(stars.length * 3);
+      const geo   = new THREE.BufferGeometry();
+      const pos   = new Float32Array(stars.length * 3);
       const sizes = new Float32Array(stars.length);
       const alphas = new Float32Array(stars.length);
       stars.forEach((s, i) => {
-        pos[i * 3]     = s.x;
-        pos[i * 3 + 1] = s.y;
-        pos[i * 3 + 2] = s.z;
+        pos[i * 3] = s.x; pos[i * 3 + 1] = s.y; pos[i * 3 + 2] = s.z;
         sizes[i]  = s.r;
         alphas[i] = s.a;
       });
@@ -551,9 +508,11 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
       geo.setAttribute('size',     new THREE.BufferAttribute(sizes, 1));
       geo.setAttribute('alpha',    new THREE.BufferAttribute(alphas, 1));
 
-      // Custom shader-based points for per-point alpha
       const mat = new THREE.ShaderMaterial({
-        uniforms: { color: { value: pal.star }, time: { value: 0 } },
+        uniforms: {
+          color: { value: new THREE.Color(pal.starHex) },
+          time:  { value: 0 },
+        },
         vertexShader: `
           attribute float size;
           attribute float alpha;
@@ -576,55 +535,46 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
           }
         `,
         transparent: true,
-        depthWrite:  false,
-        blending:    THREE.AdditiveBlending,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
       });
-
-      const points = new THREE.Points(geo, mat);
-      points.userData.starData = stars;
-      threeScene.add(points);
-      starMeshRef.current = points;
+      const pts = new THREE.Points(geo, mat);
+      pts.userData.starData = stars;
+      threeScene.add(pts);
+      starPoints.current = pts;
     }
 
-    // ── region ellipsoids (neural mode) ──
+    // ── region ellipsoids (neural mode only) ──
     if (nextMode === 'neural') {
       regions.slice(0, 10).forEach((region, idx) => {
-        const geo = new THREE.SphereGeometry(1, 16, 10);
-        const colors = [0x4cab9e, 0x65d6ff, 0xffd166];
-        const baseColor = colors[idx % 3];
-        const mat = new THREE.MeshBasicMaterial({
-          color: baseColor,
-          transparent: true,
-          opacity: 0.055,
-          side: THREE.FrontSide,
-          depthWrite: false,
+        const regionColors = [0x4cab9e, 0x65d6ff, 0xffd166];
+        const geo  = new THREE.SphereGeometry(1, 16, 10);
+        const mat  = new THREE.MeshBasicMaterial({
+          color: regionColors[idx % 3],
+          transparent: true, opacity: 0.055,
+          side: THREE.FrontSide, depthWrite: false,
           blending: THREE.AdditiveBlending,
         });
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.set(region.cx, region.cy, region.cz);
-        const sx = region.spread * 3.2;
-        const sy = region.spread * 2.0;
-        const sz = region.spread * 2.6;
-        mesh.scale.set(sx, sy, sz);
+        mesh.scale.set(region.spread * 3.2, region.spread * 2.0, region.spread * 2.6);
         mesh.rotation.y = region.angle * 0.42;
         threeScene.add(mesh);
-        regionMeshesRef.current.push(mesh);
+        regionMeshes.current.push(mesh);
 
-        // Wire outline
-        const outGeo = new THREE.EdgesGeometry(new THREE.SphereGeometry(0.72, 10, 6));
-        const outMat = new THREE.LineBasicMaterial({
-          color: idx % 3 === 2 ? 0xffe08a : 0x65d6ff,
-          transparent: true,
-          opacity: 0.12,
-          depthWrite: false,
-          blending: THREE.AdditiveBlending,
-        });
-        const outline = new THREE.LineSegments(outGeo, outMat);
-        outline.position.copy(mesh.position);
-        outline.scale.copy(mesh.scale);
-        outline.rotation.copy(mesh.rotation);
-        threeScene.add(outline);
-        regionMeshesRef.current.push(outline as any);
+        const wire = new THREE.LineSegments(
+          new THREE.EdgesGeometry(new THREE.SphereGeometry(0.72, 10, 6)),
+          new THREE.LineBasicMaterial({
+            color: idx % 3 === 2 ? 0xffe08a : 0x65d6ff,
+            transparent: true, opacity: 0.12,
+            depthWrite: false, blending: THREE.AdditiveBlending,
+          }),
+        );
+        wire.position.copy(mesh.position);
+        wire.scale.copy(mesh.scale);
+        wire.rotation.copy(mesh.rotation);
+        threeScene.add(wire);
+        regionMeshes.current.push(wire);
       });
     }
 
@@ -633,21 +583,14 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
       const byId: Record<string, SceneNode> = {};
       nodes.forEach(n => { byId[n.id] = n; });
 
-      const degree = new Map<string, number>();
-      edges.forEach(e => {
-        degree.set(e.source, (degree.get(e.source) || 0) + 1);
-        degree.set(e.target, (degree.get(e.target) || 0) + 1);
-      });
-
       const edgeLimit   = nextMode === 'neural' ? 260 : 200;
       const degreeLimit = 6;
       const edgeDeg     = new Map<string, number>();
-      let drawn         = 0;
+      let drawn = 0;
 
       for (const edge of edges) {
         if (drawn >= edgeLimit) break;
-        const a = byId[edge.source];
-        const b = byId[edge.target];
+        const a = byId[edge.source], b = byId[edge.target];
         if (!a || !b) continue;
         const da = edgeDeg.get(edge.source) || 0;
         const db = edgeDeg.get(edge.target) || 0;
@@ -656,114 +599,85 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
         edgeDeg.set(edge.target, db + 1);
         drawn++;
 
-        const edgeColor = edge.kind === 'memory' ? pal.edgeMemory : pal.edge;
-        const opacity   = edge.kind === 'memory' ? 0.42 : 0.28;
+        const isMemEdge = edge.kind === 'memory';
+        const edgeColor = new THREE.Color(isMemEdge ? pal.edgeMemoryHex : pal.edgeHex);
+        const opacity   = isMemEdge ? 0.42 : 0.28;
 
         if (nextMode === 'neural') {
-          // Quadratic bezier curve via TubeGeometry path
           const start = new THREE.Vector3(a.wx, a.wy, a.wz);
           const end   = new THREE.Vector3(b.wx, b.wy, b.wz);
           const mid   = start.clone().add(end).multiplyScalar(0.5);
-          const perp  = new THREE.Vector3(
-            -(end.y - start.y), end.x - start.x, 0
-          ).normalize();
+          const perp  = new THREE.Vector3(-(end.y - start.y), end.x - start.x, 0).normalize();
           const curveMag = Math.min(48, start.distanceTo(end) * 0.16) * ((edge.id.length % 2) ? 1 : -1);
           mid.addScaledVector(perp, curveMag);
-
           const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
-          const pts   = curve.getPoints(20);
-          const geo   = new THREE.BufferGeometry().setFromPoints(pts);
-          const mat   = new THREE.LineBasicMaterial({
-            color: edgeColor,
-            transparent: true,
-            opacity,
-            depthWrite: false,
-            blending: THREE.AdditiveBlending,
-          });
-          const line = new THREE.Line(geo, mat);
+          const line = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints(curve.getPoints(20)),
+            new THREE.LineBasicMaterial({
+              color: edgeColor, transparent: true, opacity,
+              depthWrite: false, blending: THREE.AdditiveBlending,
+            }),
+          );
           line.renderOrder = 1;
           threeScene.add(line);
-          (edgeLinesRef.current as THREE.Line[]).push(line);
+          edgeLines.current.push(line);
         } else {
-          // Straight dashed line
-          const pts = [
-            new THREE.Vector3(a.wx, a.wy, a.wz),
-            new THREE.Vector3(b.wx, b.wy, b.wz),
-          ];
-          const geo = new THREE.BufferGeometry().setFromPoints(pts);
-          const mat = new THREE.LineDashedMaterial({
-            color: edgeColor,
-            transparent: true,
-            opacity,
-            dashSize: 8,
-            gapSize: 10,
-            depthWrite: false,
-            blending: THREE.AdditiveBlending,
-          });
-          const line = new THREE.LineSegments(geo, mat);
+          const line = new THREE.LineSegments(
+            new THREE.BufferGeometry().setFromPoints([
+              new THREE.Vector3(a.wx, a.wy, a.wz),
+              new THREE.Vector3(b.wx, b.wy, b.wz),
+            ]),
+            new THREE.LineDashedMaterial({
+              color: edgeColor, transparent: true, opacity,
+              dashSize: 8, gapSize: 10,
+              depthWrite: false, blending: THREE.AdditiveBlending,
+            }),
+          );
           line.computeLineDistances();
           line.renderOrder = 1;
           threeScene.add(line);
-          (edgeLinesRef.current as THREE.LineSegments[]).push(line as any);
+          edgeLines.current.push(line as any);
         }
       }
     }
 
-    // ── node glow discs ──
+    // ── node glow sprites + core discs ──
     {
-      const byId: Record<string, SceneNode> = {};
-      nodes.forEach(n => { byId[n.id] = n; });
-
-      const nodeDeg = new Map<string, number>();
-      edges.forEach(e => {
-        nodeDeg.set(e.source, (nodeDeg.get(e.source) || 0) + 1);
-        nodeDeg.set(e.target, (nodeDeg.get(e.target) || 0) + 1);
-      });
-
-      nodes.forEach((node, _idx) => {
+      nodes.forEach((node, nIdx) => {
         const isMemory = node.kind === 'memory';
-        const weight   = Math.max(1, Number(node.weight || node.count || 1));
-        const baseCol  = isMemory
-          ? `#${pal.memory.getHexString()}`
-          : `#${pal.star.getHexString()}`;
+        const baseColor = isMemory ? pal.memoryStr : pal.starStr;
+        const glowTex  = makeGlowTexture(THREE, baseColor, isMemory);
 
-        const glowTex = makeGlowTexture(baseCol, isMemory);
-        const spriteMat = new THREE.SpriteMaterial({
-          map: glowTex,
-          transparent: true,
-          depthWrite: false,
-          blending: THREE.AdditiveBlending,
+        const glowMat  = new THREE.SpriteMaterial({
+          map: glowTex as any, transparent: true,
+          depthWrite: false, blending: THREE.AdditiveBlending,
           opacity: isMemory ? 0.88 : 0.75,
         });
-        const sprite = new THREE.Sprite(spriteMat);
-        sprite.position.set(node.wx, node.wy, node.wz);
-        const glowSize = node.radius * (isMemory ? 4.5 : 3.4);
-        sprite.scale.set(glowSize, glowSize, 1);
-        sprite.renderOrder = 2;
-        sprite.userData.nodeId = node.id;
-        sprite.userData.nodeIndex = _idx;
-        sprite.userData.isGlow = true;
-        threeScene.add(sprite);
-        nodeMeshesRef.current.push(sprite as any);
+        const glow  = new THREE.Sprite(glowMat);
+        glow.position.set(node.wx, node.wy, node.wz);
+        const gs = node.radius * (isMemory ? 4.5 : 3.4);
+        glow.scale.set(gs, gs, 1);
+        glow.renderOrder = 2;
+        glow.userData.nodeId    = node.id;
+        glow.userData.nodeIndex = nIdx;
+        glow.userData.isGlow    = true;
+        threeScene.add(glow);
+        nodeMeshes.current.push(glow);
 
-        // Bright white core disc
-        const coreGeo = new THREE.CircleGeometry(node.radius * 0.38, 16);
-        const coreMat = new THREE.MeshBasicMaterial({
-          color: 0xffffff,
-          transparent: true,
-          opacity: 0.97,
-          depthWrite: false,
-          side: THREE.DoubleSide,
-        });
-        const core = new THREE.Mesh(coreGeo, coreMat);
+        const core = new THREE.Mesh(
+          new THREE.CircleGeometry(node.radius * 0.38, 16),
+          new THREE.MeshBasicMaterial({
+            color: 0xffffff, transparent: true, opacity: 0.97,
+            depthWrite: false, side: THREE.DoubleSide,
+          }),
+        );
         core.position.set(node.wx, node.wy, node.wz);
         core.renderOrder = 3;
         core.userData.nodeId    = node.id;
-        core.userData.nodeIndex = _idx;
-        core.userData.isCore    = true;
-        core.userData.weight    = weight;
+        core.userData.nodeIndex = nIdx;
+        core.userData.isCore   = true;
         threeScene.add(core);
-        nodeMeshesRef.current.push(core);
+        nodeMeshes.current.push(core);
       });
     }
 
@@ -776,49 +690,42 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
       });
 
       nodes.forEach(node => {
-        const raw   = labelForCanvas(node.label || '');
+        const raw   = labelForDisplay(node.label || '');
         if (isTechnical(raw)) return;
         const weight = Math.max(1, Number(node.weight || node.count || 1));
         const deg    = nodeDeg.get(node.id) || 0;
         const score  = Math.log1p(weight) * 0.52 + Math.log1p(deg) * 0.38 + (node.kind !== 'memory' ? 0.9 : 0.1);
-        if (score < 1.8) return; // skip very minor nodes
+        if (score < 1.8) return;
 
-        const label    = shortLabel(raw);
-        const tex      = makeLabelTexture(label, pal.text);
-        const mat      = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
-        const sprite   = new THREE.Sprite(mat);
-        const aspect   = tex.image.width / tex.image.height;
-        const labelW   = node.radius * 3.2 * aspect;
-        const labelH   = node.radius * 3.2;
-        sprite.scale.set(labelW, labelH, 1);
-        sprite.position.set(
-          node.wx + node.radius * 1.8,
-          node.wy + node.radius * 0.6,
-          node.wz,
-        );
+        const label   = shortLabel(raw);
+        const tex     = makeLabelTexture(THREE, label, pal.text);
+        const mat     = new THREE.SpriteMaterial({ map: tex as any, transparent: true, depthWrite: false });
+        const sprite  = new THREE.Sprite(mat);
+        const aspect  = (tex as any).image.width / (tex as any).image.height;
+        const lw      = node.radius * 3.2 * aspect;
+        const lh      = node.radius * 3.2;
+        sprite.scale.set(lw, lh, 1);
+        sprite.position.set(node.wx + node.radius * 1.8, node.wy + node.radius * 0.6, node.wz);
         sprite.renderOrder = 4;
-        sprite.userData.labelKey   = label;
-        sprite.userData.labelColor = pal.text;
-        sprite.userData.nodeId     = node.id;
+        sprite.userData.nodeId = node.id;
         threeScene.add(sprite);
-        labelSpritesRef.current.push(sprite);
+        labelSprites.current.push(sprite);
       });
     }
 
-    // Re-seat selection/hover rings off screen until a node is picked
-    const sel = selectionRingRef.current;
-    const hov = hoverRingRef.current;
-    if (sel) sel.visible = false;
-    if (hov) hov.visible = false;
+    // Hide rings until something is selected
+    if (selRingRef.current) selRingRef.current.visible = false;
+    if (hovRingRef.current) hovRingRef.current.visible = false;
   }, [clearScene]);
 
   /* ─────────── reset camera ─────────── */
   const resetView = useCallback((nextMode: VisualiserMode = modeRef.current) => {
-    const cam = camStateRef.current;
-    const z   = nextMode === 'neural' ? CAMERA_Z_NEURAL : CAMERA_Z_CONST;
-    cam.spherical.set(z, Math.PI / 2 - 0.34, -0.42);
-    cam.panOffset.set(0, 0, 0);
-    cam.zoom = 1.0;
+    const cam = camRef.current;
+    cam.theta  = -0.42;
+    cam.phi    = Math.PI / 2 - 0.34;
+    cam.radius = nextMode === 'neural' ? CAMERA_Z_NEURAL : CAMERA_Z_CONST;
+    cam.panOffset = { x: 0, y: 0, z: 0 };
+    cam.zoom       = 1.0;
     cam.autoRotate = true;
     const camera = cameraRef.current;
     if (camera) {
@@ -829,81 +736,79 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
     pausedRef.current = false;
   }, []);
 
-  /* ─────────── rebuild scene when data/mode changes ─────────── */
+  /* ─────────── rebuild when data/mode changes ─────────── */
   useEffect(() => {
-    if (!data) return;
+    if (!threeReady || !data) return;
     window.localStorage.setItem('mnemosyne-dashboard-visualiser-mode', mode);
     buildThreeScene(data, mode);
     resetView(mode);
     setSelectedNode(null);
     setHoveredNode(null);
-  }, [data, mode, buildThreeScene, resetView]);
+  }, [threeReady, data, mode, buildThreeScene, resetView]);
 
   /* ─────────── animation loop ─────────── */
   useEffect(() => {
-    if (loading || sceneError || !data) return;
-    const renderer = rendererRef.current;
+    if (!threeReady || loading || sceneError || !data) return;
+    const renderer  = rendererRef.current;
     const threeScene = sceneRef.current;
     const camera     = cameraRef.current;
     if (!renderer || !threeScene || !camera) return;
 
-    const cam = camStateRef.current;
-
+    const cam = camRef.current;
     let animFrame: number;
+
     const animate = () => {
       animFrame = requestAnimationFrame(animate);
       frameRef.current = animFrame;
 
-      const time    = clockRef.current.getElapsedTime() * 1000; // ms
-      const delta   = clockRef.current.getDelta() * 1000;        // ms
+      const now   = performance.now();
+      const time  = now - clockRef.current.start;
+      const delta = clockRef.current.last ? Math.min(64, now - clockRef.current.last) : 16;
+      clockRef.current.last = now;
 
       // Auto-rotation
       const currentMode = modeRef.current;
       if (!pausedRef.current && cam.dragMode === null && cam.autoRotate) {
         const speed = currentMode === 'neural' ? 0.000032 : 0.000065;
-        cam.spherical.theta += delta * speed;
+        cam.theta += delta * speed;
       }
 
-      // Update camera from spherical + pan
-      const r = cam.spherical.radius * cam.zoom;
-      const clampedPhi = Math.max(0.15, Math.min(Math.PI - 0.15, cam.spherical.phi));
-      const x = r * Math.sin(clampedPhi) * Math.sin(cam.spherical.theta);
-      const y = r * Math.cos(clampedPhi);
-      const z = r * Math.sin(clampedPhi) * Math.cos(cam.spherical.theta);
-      camera.position.set(x, y, z).add(cam.panOffset);
-      camera.lookAt(cam.panOffset);
+      // Camera position from spherical coords
+      const r    = cam.radius * cam.zoom;
+      const phi  = Math.max(0.15, Math.min(Math.PI - 0.15, cam.phi));
+      const px   = r * Math.sin(phi) * Math.sin(cam.theta);
+      const py   = r * Math.cos(phi);
+      const pz   = r * Math.sin(phi) * Math.cos(cam.theta);
+      const po   = cam.panOffset;
+      camera.position.set(px + po.x, py + po.y, pz + po.z);
+      camera.lookAt(po.x, po.y, po.z);
 
-      // Animate node glow twinkle
+      // Twinkle glow sprites
       const nodes = nodesRef.current;
-      nodeMeshesRef.current.forEach(m => {
+      nodeMeshes.current.forEach(m => {
         if (!m.userData.isGlow) return;
-        const nIdx  = m.userData.nodeIndex as number;
-        const node  = nodes[nIdx];
+        const node = nodes[m.userData.nodeIndex as number];
         if (!node) return;
         const pulse = 1 + Math.sin(time * node.twinkleFreq + node.twinkle * 6.28) * node.twinkleAmp;
-        const s = m.scale.x / pulse; // reverse previous
-        const base = node.radius * (node.kind === 'memory' ? 4.5 : 3.4);
-        const ns   = base * pulse;
-        m.scale.set(ns, ns, 1);
+        const base  = node.radius * (node.kind === 'memory' ? 4.5 : 3.4) * pulse;
+        (m as THREEns.Sprite).scale.set(base, base, 1);
       });
 
-      // Animate star points time uniform
-      if (starMeshRef.current) {
-        const mat = starMeshRef.current.material as THREE.ShaderMaterial;
-        mat.uniforms.time.value = time * 0.001;
+      // Update star time uniform
+      if (starPoints.current) {
+        ((starPoints.current.material as THREEns.ShaderMaterial).uniforms.time.value) = time * 0.001;
       }
 
-      // Billboard: face core discs toward camera
-      nodeMeshesRef.current.forEach(m => {
-        if (!m.userData.isCore) return;
-        m.quaternion.copy(camera.quaternion);
+      // Billboard core discs toward camera
+      nodeMeshes.current.forEach(m => {
+        if (m.userData.isCore) m.quaternion.copy(camera.quaternion);
       });
 
-      // Sync ring positions to selected/hovered nodes
+      // Sync selection / hover rings
       const selNode = selectedNodeRef.current;
       const hovNode = hoveredNodeRef.current;
-      const selRing = selectionRingRef.current;
-      const hovRing = hoverRingRef.current;
+      const selRing = selRingRef.current;
+      const hovRing = hovRingRef.current;
 
       if (selRing) {
         if (selNode) {
@@ -912,9 +817,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
           selRing.quaternion.copy(camera.quaternion);
           const rs = selNode.radius * 2.6;
           selRing.scale.set(rs, rs, rs);
-        } else {
-          selRing.visible = false;
-        }
+        } else { selRing.visible = false; }
       }
       if (hovRing) {
         if (hovNode && hovNode.id !== selNode?.id) {
@@ -923,205 +826,150 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
           hovRing.quaternion.copy(camera.quaternion);
           const rh = hovNode.radius * 2.6;
           hovRing.scale.set(rh, rh, rh);
-        } else {
-          hovRing.visible = false;
-        }
+        } else { hovRing.visible = false; }
       }
 
       renderer.render(threeScene, camera);
     };
 
     animate();
-    return () => {
-      cancelAnimationFrame(animFrame);
-    };
-  }, [data, loading, sceneError]);
+    return () => cancelAnimationFrame(animFrame);
+  }, [threeReady, data, loading, sceneError]);
 
-  /* ─────────── interaction (pointer/wheel) ─────────── */
+  /* ─────────── pointer / wheel interaction ─────────── */
   useEffect(() => {
-    if (loading || sceneError || !data) return;
-    const mount  = mountRef.current;
+    if (!threeReady || loading || sceneError || !data) return;
     const canvas = rendererRef.current?.domElement;
-    if (!mount || !canvas) return;
+    if (!canvas) return;
 
-    const cam     = camStateRef.current;
+    const THREE = THREE_REF.current!;
+    const cam   = camRef.current;
     const raycaster = new THREE.Raycaster();
-    raycaster.params.Points!.threshold = 8;
-
-    const getPointerNDC = (clientX: number, clientY: number): THREE.Vector2 => {
-      const rect = canvas.getBoundingClientRect();
-      return new THREE.Vector2(
-        ((clientX - rect.left) / rect.width)  * 2 - 1,
-        -((clientY - rect.top)  / rect.height) * 2 + 1,
-      );
-    };
 
     const pickNode = (clientX: number, clientY: number): SceneNode | null => {
       const camera = cameraRef.current;
       if (!camera) return null;
-      const ndc = getPointerNDC(clientX, clientY);
+      const rect = canvas.getBoundingClientRect();
+      const ndc  = new THREE.Vector2(
+        ((clientX - rect.left) / rect.width)  * 2 - 1,
+        -((clientY - rect.top)  / rect.height) * 2 + 1,
+      );
       raycaster.setFromCamera(ndc, camera);
-
+      const cores  = nodeMeshes.current.filter(m => m.userData.isCore);
+      const hits   = raycaster.intersectObjects(cores);
       const nodes  = nodesRef.current;
       const byId: Record<string, SceneNode> = {};
       nodes.forEach(n => { byId[n.id] = n; });
+      if (hits.length > 0) return byId[hits[0].object.userData.nodeId as string] || null;
 
-      // Test against all node core meshes
-      const targets = nodeMeshesRef.current.filter(m => m.userData.isCore);
-      const hits    = raycaster.intersectObjects(targets);
-      if (hits.length > 0) {
-        const id = hits[0].object.userData.nodeId as string;
-        return byId[id] || null;
-      }
-
-      // Fallback: sphere test in screen space
-      const rect = canvas.getBoundingClientRect();
-      const cx   = clientX - rect.left;
-      const cy   = clientY - rect.top;
-      const w    = rect.width;
-      const h    = rect.height;
-
-      let best: SceneNode | null = null;
-      let bestDist = Infinity;
-
+      // Fallback: screen-space sphere test
+      const w = rect.width, h = rect.height;
+      const cx = clientX - rect.left, cy = clientY - rect.top;
+      let best: SceneNode | null = null, bestD = Infinity;
       for (const node of nodes) {
-        const v = new THREE.Vector3(node.wx, node.wy, node.wz).project(camera);
-        const sx = (v.x + 1) / 2 * w;
-        const sy = (1 - (v.y + 1) / 2) * h;
-        const dist = Math.hypot(sx - cx, sy - cy);
-        const hitR = Math.max(18, node.radius * 2.2);
-        if (dist < hitR && dist < bestDist) {
-          best     = node;
-          bestDist = dist;
-        }
+        const v  = new THREE.Vector3(node.wx, node.wy, node.wz).project(camera);
+        const sx = (v.x + 1) / 2 * w, sy = (1 - (v.y + 1) / 2) * h;
+        const d  = Math.hypot(sx - cx, sy - cy);
+        if (d < Math.max(18, node.radius * 2.2) && d < bestD) { best = node; bestD = d; }
       }
       return best;
     };
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const factor = Math.exp(-e.deltaY * 0.0012);
-      cam.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, cam.zoom * factor));
+      cam.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, cam.zoom * Math.exp(-e.deltaY * 0.0012)));
     };
 
     const handlePointerDown = (e: PointerEvent) => {
       if (e.cancelable) e.preventDefault();
       try { canvas.setPointerCapture(e.pointerId); } catch {}
-      cam.pointers.set(e.pointerId, new THREE.Vector2(e.clientX, e.clientY));
+      cam.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (cam.pointers.size === 1) {
-        cam.dragMode = cam.cameraMode === 'pan' || e.shiftKey || e.button === 1 || e.button === 2
-          ? 'pan' : 'rotate';
-        cam.dragStart.set(e.clientX, e.clientY);
-        cam.dragSphStart.copy(cam.spherical);
-        cam.dragPanStart.copy(cam.panOffset);
+        cam.dragMode = cam.cameraMode === 'pan' || e.shiftKey || e.button === 1 || e.button === 2 ? 'pan' : 'rotate';
+        cam.dragStartX = e.clientX; cam.dragStartY = e.clientY;
+        cam.dragThetaStart = cam.theta; cam.dragPhiStart = cam.phi;
+        cam.dragPanStart   = { ...cam.panOffset };
       }
       canvas.style.cursor = 'grabbing';
     };
 
     const handlePointerMove = (e: PointerEvent) => {
-      cam.pointers.set(e.pointerId, new THREE.Vector2(e.clientX, e.clientY));
+      cam.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-      // Pinch-zoom (2 fingers)
       if (cam.pointers.size === 2) {
         const pts = [...cam.pointers.values()];
-        const d   = pts[0].distanceTo(pts[1]);
-        if (cam.pinchStartDist === 0) {
-          cam.pinchStartDist = d;
-          cam.pinchStartZoom = cam.zoom;
-        } else {
-          cam.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, cam.pinchStartZoom * (d / cam.pinchStartDist)));
-        }
+        const d   = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        if (cam.pinchStartDist === 0) { cam.pinchStartDist = d; cam.pinchStartZoom = cam.zoom; }
+        else cam.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, cam.pinchStartZoom * (d / cam.pinchStartDist)));
         return;
       }
 
-      // Hover hit-test (no drag)
       if (cam.dragMode === null) {
         const hit = pickNode(e.clientX, e.clientY);
-        if (hit?.id !== hoveredNodeRef.current?.id) {
-          hoveredNodeRef.current = hit;
-          setHoveredNode(hit);
-        }
+        if (hit?.id !== hoveredNodeRef.current?.id) { hoveredNodeRef.current = hit; setHoveredNode(hit); }
         canvas.style.cursor = hit ? 'pointer' : 'grab';
         return;
       }
 
       if (e.cancelable) e.preventDefault();
-      const dx = e.clientX - cam.dragStart.x;
-      const dy = e.clientY - cam.dragStart.y;
-
+      const dx = e.clientX - cam.dragStartX, dy = e.clientY - cam.dragStartY;
       if (cam.dragMode === 'rotate') {
-        cam.spherical.theta = cam.dragSphStart.theta - dx * 0.008;
-        cam.spherical.phi   = Math.max(0.15, Math.min(
-          Math.PI - 0.15,
-          cam.dragSphStart.phi + dy * 0.006,
-        ));
+        cam.theta = cam.dragThetaStart - dx * 0.008;
+        cam.phi   = Math.max(0.15, Math.min(Math.PI - 0.15, cam.dragPhiStart + dy * 0.006));
       } else {
-        // Pan: project in camera space
         const camera = cameraRef.current;
         if (!camera) return;
-        const right = new THREE.Vector3();
-        const up    = new THREE.Vector3();
-        camera.getWorldDirection(new THREE.Vector3());
-        right.setFromMatrixColumn(camera.matrix, 0);
-        up.setFromMatrixColumn(camera.matrix, 1);
-        const panScale = cam.zoom * cam.spherical.radius * 0.0014;
-        cam.panOffset.copy(cam.dragPanStart)
-          .addScaledVector(right, -dx * panScale)
-          .addScaledVector(up,     dy * panScale);
+        const right = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0);
+        const up    = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1);
+        const scale = cam.zoom * cam.radius * 0.0014;
+        cam.panOffset = {
+          x: cam.dragPanStart.x - right.x * dx * scale + up.x * dy * scale,
+          y: cam.dragPanStart.y - right.y * dx * scale + up.y * dy * scale,
+          z: cam.dragPanStart.z - right.z * dx * scale + up.z * dy * scale,
+        };
       }
     };
 
     const handlePointerUp = (e: PointerEvent) => {
-      const start  = cam.pointers.get(e.pointerId);
-      const moved  = start ? start.distanceTo(new THREE.Vector2(e.clientX, e.clientY)) > 5 : false;
+      const prev   = cam.pointers.get(e.pointerId);
+      const moved  = prev ? Math.hypot(prev.x - e.clientX, prev.y - e.clientY) > 5 : false;
       cam.pointers.delete(e.pointerId);
-
       if (cam.pointers.size === 0) {
         cam.pinchStartDist = 0;
-        if (!moved) {
-          // Click — pick node
-          const hit = pickNode(e.clientX, e.clientY);
-          selectedNodeRef.current = hit;
-          setSelectedNode(hit);
-        }
+        if (!moved) { const hit = pickNode(e.clientX, e.clientY); selectedNodeRef.current = hit; setSelectedNode(hit); }
         cam.dragMode = null;
         canvas.style.cursor = 'grab';
       }
     };
-
-    const handleContextMenu = (e: MouseEvent) => e.preventDefault();
 
     canvas.addEventListener('wheel',        handleWheel,       { passive: false });
     canvas.addEventListener('pointerdown',  handlePointerDown);
     canvas.addEventListener('pointermove',  handlePointerMove);
     canvas.addEventListener('pointerup',    handlePointerUp);
     canvas.addEventListener('pointercancel',handlePointerUp);
-    canvas.addEventListener('contextmenu',  handleContextMenu);
+    canvas.addEventListener('contextmenu',  (e: Event) => e.preventDefault());
 
     return () => {
-      canvas.removeEventListener('wheel',        handleWheel);
-      canvas.removeEventListener('pointerdown',  handlePointerDown);
-      canvas.removeEventListener('pointermove',  handlePointerMove);
-      canvas.removeEventListener('pointerup',    handlePointerUp);
-      canvas.removeEventListener('pointercancel',handlePointerUp);
-      canvas.removeEventListener('contextmenu',  handleContextMenu);
+      canvas.removeEventListener('wheel',       handleWheel);
+      canvas.removeEventListener('pointerdown', handlePointerDown);
+      canvas.removeEventListener('pointermove', handlePointerMove);
+      canvas.removeEventListener('pointerup',   handlePointerUp);
+      canvas.removeEventListener('pointercancel', handlePointerUp);
     };
-  }, [loading, sceneError, data]);
+  }, [threeReady, loading, sceneError, data]);
 
   /* ─────────── UI handlers ─────────── */
   const togglePause = () => {
     const next = !pausedRef.current;
     pausedRef.current = next;
-    camStateRef.current.autoRotate = !next;
+    camRef.current.autoRotate = !next;
     setPaused(next);
   };
-
   const togglePan = () => {
-    const next: CameraMode = camStateRef.current.cameraMode === 'pan' ? 'rotate' : 'pan';
-    camStateRef.current.cameraMode = next;
+    const next: CameraMode = camRef.current.cameraMode === 'pan' ? 'rotate' : 'pan';
+    camRef.current.cameraMode = next;
     setCameraMode(next);
   };
-
   const toggleFullscreen = () => {
     const wrap = wrapRef.current;
     if (!wrap) return;
@@ -1129,8 +977,8 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
     else wrap.requestFullscreen?.();
   };
 
-  const counts = { nodes: data?.nodes?.length || 0, edges: data?.edges?.length || 0 };
-  const pal    = paletteFor(mode);
+  const counts    = { nodes: data?.nodes?.length || 0, edges: data?.edges?.length || 0 };
+  const pal       = PALETTES[mode];
   const activeNode = selectedNode || hoveredNode;
 
   /* ─────────── render ─────────── */
@@ -1174,15 +1022,17 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
         <div
           ref={wrapRef}
           style={{
-            position: 'relative',
-            minHeight: '680px',
-            border: `1px solid ${MG(0.1)}`,
-            borderRadius: '6px',
-            overflow: 'hidden',
-            background: mode === 'neural' ? '#06100f' : '#050711',
+            position: 'relative', minHeight: '680px',
+            border: `1px solid ${MG(0.1)}`, borderRadius: '6px',
+            overflow: 'hidden', background: pal.bg,
           }}
         >
-          {loading ? (
+          {/* Error states */}
+          {threeError ? (
+            <div style={{ height: '680px', display: 'grid', placeItems: 'center', color: '#f87171', padding: '24px', textAlign: 'center' }}>
+              {threeError}
+            </div>
+          ) : loading ? (
             <div style={{ height: '680px', display: 'grid', placeItems: 'center', color: MG(0.4), fontSize: '12px' }}>
               {t('visualiser.loadingEngine')}
             </div>
@@ -1190,48 +1040,43 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
             <div style={{ height: '680px', display: 'grid', placeItems: 'center', color: '#f87171', padding: '24px', textAlign: 'center' }}>
               {sceneError}
             </div>
-          ) : counts.nodes > 0 ? (
-            <>
-              {/* Three.js mount target */}
-              <div
-                ref={mountRef}
-                aria-label={t('visualiser.canvasLabel')}
-                style={{ width: '100%', height: '100%', minHeight: '680px', display: 'block' }}
-              />
-
-              {/* Legend overlay */}
-              <div
-                aria-label={t('visualiser.legend')}
-                style={{
-                  position: 'absolute',
-                  right: '16px',
-                  bottom: '14px',
-                  display: 'flex',
-                  gap: '14px',
-                  alignItems: 'center',
-                  padding: '8px 10px',
-                  border: `1px solid ${MG(0.12)}`,
-                  background: 'rgba(5,7,17,0.72)',
-                  borderRadius: '4px',
-                  color: MG(0.72),
-                  fontSize: '11px',
-                  backdropFilter: 'blur(8px)',
-                  pointerEvents: 'none',
-                }}
-              >
-                <span><span style={{ color: `#${pal.star.getHexString()}` }}>●</span> {mode === 'neural' ? t('visualiser.neuronHub') : t('visualiser.entityTopic')}</span>
-                <span><span style={{ color: `#${pal.memory.getHexString()}` }}>●</span> {mode === 'neural' ? t('visualiser.memorySoma') : t('visualiser.memory')}</span>
-                <span style={{ color: MG(0.55) }}>─ {mode === 'neural' ? t('visualiser.synapse') : t('visualiser.link')}</span>
-              </div>
-            </>
-          ) : (
+          ) : counts.nodes === 0 ? (
             <div style={{ height: '680px', display: 'grid', placeItems: 'center', color: MG(0.4), fontSize: '12px' }}>
               {t('visualiser.noNodes')}
+            </div>
+          ) : null}
+
+          {/* Three.js mount point — always rendered so the renderer can attach */}
+          <div
+            ref={mountRef}
+            aria-label={t('visualiser.canvasLabel')}
+            style={{
+              width: '100%', height: '100%', minHeight: '680px',
+              display: counts.nodes > 0 && !threeError && !sceneError ? 'block' : 'none',
+            }}
+          />
+
+          {/* Legend overlay */}
+          {counts.nodes > 0 && !threeError && !sceneError && (
+            <div
+              aria-label={t('visualiser.legend')}
+              style={{
+                position: 'absolute', right: '16px', bottom: '14px',
+                display: 'flex', gap: '14px', alignItems: 'center',
+                padding: '8px 10px', border: `1px solid ${MG(0.12)}`,
+                background: 'rgba(5,7,17,0.72)', borderRadius: '4px',
+                color: MG(0.72), fontSize: '11px',
+                backdropFilter: 'blur(8px)', pointerEvents: 'none',
+              }}
+            >
+              <span><span style={{ color: pal.starStr }}>●</span> {mode === 'neural' ? t('visualiser.neuronHub') : t('visualiser.entityTopic')}</span>
+              <span><span style={{ color: pal.memoryStr }}>●</span> {mode === 'neural' ? t('visualiser.memorySoma') : t('visualiser.memory')}</span>
+              <span style={{ color: MG(0.55) }}>─ {mode === 'neural' ? t('visualiser.synapse') : t('visualiser.link')}</span>
             </div>
           )}
         </div>
 
-        {/* Inspector aside */}
+        {/* Inspector */}
         <aside style={{ border: `1px solid ${MG(0.1)}`, borderRadius: '6px', background: MG(0.02), minHeight: '680px' }}>
           <div style={{ padding: '18px 20px', borderBottom: `1px solid ${MG(0.08)}` }}>
             <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.14em', color: MG(0.45), fontWeight: 700 }}>
@@ -1245,7 +1090,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
             {activeNode ? (
               <>
                 <div style={{ color: MG(0.5), fontSize: '12px', lineHeight: 1.6 }}>
-                  {(activeNode.category || t('common.unknown'))} · {Number(activeNode.count || 0).toLocaleString()} {t('visualiser.signals')} · {t('visualiser.weight')} {safeNumber(activeNode.weight, 2, 'n/a')}
+                  {activeNode.category || t('common.unknown')} · {Number(activeNode.count || 0).toLocaleString()} {t('visualiser.signals')} · {t('visualiser.weight')} {safeNumber(activeNode.weight, 2, 'n/a')}
                 </div>
                 {activeNode.preview && (
                   <div style={{ fontSize: '13px', lineHeight: 1.55, color: MG(0.74), padding: '12px', border: `1px solid ${MG(0.08)}`, background: MG(0.03), borderRadius: '4px' }}>
@@ -1271,7 +1116,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
         </aside>
       </div>
 
-      {/* Cluster badge row */}
+      {/* Cluster badges */}
       {!!data?.clusters?.length && (
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {data.clusters.slice(0, 10).map((cluster: any) => (

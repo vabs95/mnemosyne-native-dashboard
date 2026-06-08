@@ -97,7 +97,7 @@ def _get_version() -> str:
     try:
         manifest_path = Path(__file__).resolve().parent / "manifest.json"
         if manifest_path.exists():
-            with open(manifest_path, "r", encoding="utf-8") as f:
+            with open(manifest_path, encoding="utf-8") as f:
                 return json.load(f).get("version", "0.1.0")
     except Exception:
         pass
