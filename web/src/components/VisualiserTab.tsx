@@ -115,6 +115,8 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
   const wrapRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<number | null>(null);
   const sceneRef = useRef<SceneState>(sceneDefaults());
+  const selectedNodeRef = useRef<SceneNode | null>(null);
+  const hoveredNodeRef = useRef<SceneNode | null>(null);
   const [loading, setLoading] = useState(true);
   const [sceneError, setSceneError] = useState('');
   const [data, setData] = useState<any>(null);
@@ -126,6 +128,14 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
   const [cameraMode, setCameraMode] = useState<CameraMode>('rotate');
   const [selectedNode, setSelectedNode] = useState<SceneNode | null>(null);
   const [hoveredNode, setHoveredNode] = useState<SceneNode | null>(null);
+
+  useEffect(() => {
+    selectedNodeRef.current = selectedNode;
+  }, [selectedNode]);
+
+  useEffect(() => {
+    hoveredNodeRef.current = hoveredNode;
+  }, [hoveredNode]);
 
   const clampCamera = useCallback((width: number, height: number) => {
     const scene = sceneRef.current;
@@ -477,11 +487,11 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
       hits.push({ x: p.x, y: p.y, r: Math.max(14, halo + 8), node });
     });
 
-    const activeNode = selectedNode || hoveredNode;
+    const activeNode = selectedNodeRef.current || hoveredNodeRef.current;
     if (activeNode) {
       const p = projected.get(activeNode.id);
       if (p) {
-        ctx.strokeStyle = selectedNode?.id === activeNode.id ? 'rgba(255,224,138,.95)' : 'rgba(247,248,255,.85)';
+        ctx.strokeStyle = selectedNodeRef.current?.id === activeNode.id ? 'rgba(255,224,138,.95)' : 'rgba(247,248,255,.85)';
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(p.x, p.y, 18, 0, Math.PI * 2);
@@ -491,10 +501,11 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
 
     scene.hits = hits;
     frameRef.current = requestAnimationFrame(draw);
-  }, [clampCamera, hoveredNode, mode, projectNode, selectedNode]);
+  }, [clampCamera, mode, projectNode]);
 
   useEffect(() => {
     if (loading || sceneError || !data) return;
+    if (frameRef.current) cancelAnimationFrame(frameRef.current);
     frameRef.current = requestAnimationFrame(draw);
     return () => {
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
@@ -502,6 +513,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
   }, [data, draw, loading, sceneError]);
 
   useEffect(() => {
+    if (loading || sceneError || !data) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -525,7 +537,10 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
       const x = event.clientX - rect.left;
       const y = event.clientY - rect.top;
       const hit = sceneRef.current.hits.find((candidate) => Math.hypot(candidate.x - x, candidate.y - y) <= candidate.r)?.node || null;
-      setHoveredNode(hit);
+      if (hoveredNodeRef.current?.id !== hit?.id) {
+        hoveredNodeRef.current = hit;
+        setHoveredNode(hit);
+      }
       canvas.style.cursor = sceneRef.current.drag ? 'grabbing' : hit ? 'pointer' : 'grab';
     };
 
@@ -535,6 +550,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
     };
     const handlePointerDown = (event: PointerEvent) => {
       if (event.cancelable) event.preventDefault();
+      canvas.style.touchAction = 'none';
       try { canvas.setPointerCapture(event.pointerId); } catch {}
       const scene = sceneRef.current;
       scene.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -582,8 +598,10 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
       const x = event.clientX - rect.left;
       const y = event.clientY - rect.top;
       const hit = sceneRef.current.hits.find((candidate) => Math.hypot(candidate.x - x, candidate.y - y) <= candidate.r)?.node || null;
+      selectedNodeRef.current = hit;
       setSelectedNode(hit);
     };
+    const handleContextMenu = (event: MouseEvent) => event.preventDefault();
 
     canvas.addEventListener('wheel', handleWheel, { passive: false });
     canvas.addEventListener('pointerdown', handlePointerDown);
@@ -591,7 +609,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
     canvas.addEventListener('pointerup', handlePointerEnd);
     canvas.addEventListener('pointercancel', handlePointerEnd);
     canvas.addEventListener('click', handleClick);
-    canvas.addEventListener('contextmenu', (event) => event.preventDefault());
+    canvas.addEventListener('contextmenu', handleContextMenu);
     return () => {
       canvas.removeEventListener('wheel', handleWheel);
       canvas.removeEventListener('pointerdown', handlePointerDown);
@@ -599,8 +617,9 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
       canvas.removeEventListener('pointerup', handlePointerEnd);
       canvas.removeEventListener('pointercancel', handlePointerEnd);
       canvas.removeEventListener('click', handleClick);
+      canvas.removeEventListener('contextmenu', handleContextMenu);
     };
-  }, [clampCamera]);
+  }, [clampCamera, data, loading, sceneError]);
 
   const togglePause = () => {
     sceneRef.current.paused = !sceneRef.current.paused;
