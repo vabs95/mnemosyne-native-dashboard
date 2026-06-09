@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, Button, Input, Select, SelectOption, Checkbox } from '@hermes/sdk';
-import { formatDateTimeLabel, safeNumber, shortId } from '../utils/format';
-import { t } from '../utils/i18n';
-import { MemoryItem, API_BASE as API } from '../types';
+import { fetchJSON, Card, CardContent, Badge, Button, Input, Select, SelectOption, Checkbox } from '@hermes/sdk';
+import { formatDateTimeLabel, safeNumber, shortId } from '@/utils/format';
+import { t } from '@/utils/i18n';
+import { MemoryItem, API_BASE as API } from '@/types';
 
 const MG = (o: number) => `rgba(234,234,234,${o})`;
 const VERACITY_COLOR: Record<string, string> = {
@@ -75,7 +75,7 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
 
       setTotalCount(data.total || 0);
       setHasMore(!!data.has_more);
-      setNextOffset(data.next_offset !== undefined ? data.next_offset : null);
+      setNextOffset(data.next_offset === undefined ? null : data.next_offset);
     } catch (err) {
       console.error(err);
     } finally {
@@ -101,7 +101,7 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
         setSelectedIds(new Set());
         setTotalCount(data.total || 0);
         setHasMore(!!data.has_more);
-        setNextOffset(data.next_offset !== undefined ? data.next_offset : null);
+        setNextOffset(data.next_offset === undefined ? null : data.next_offset);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -181,6 +181,115 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
 
   const currentQueueInfo = cards.find(c => c.key === selectedQueue);
 
+  const renderReviewListContent = () => {
+    if (loading && items.length === 0) {
+      return <div style={{ padding: '60px', textAlign: 'center', color: MG(0.4) }}>{t('review.loadingTriage')}</div>;
+    }
+    if (items.length === 0) {
+      return (
+        <div style={{ padding: '20px', border: `1px dashed ${MG(0.15)}`, borderRadius: '4px', textAlign: 'center', color: MG(0.35), fontSize: '12px' }}>
+          {t('review.noItems')}
+        </div>
+      );
+    }
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {items.map(m => (
+          <div
+            key={m.id}
+            style={{
+              padding: '12px',
+              borderRadius: '4px',
+              background: MG(0.03),
+              border: `1px solid ${MG(0.07)}`,
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '12px',
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = MG(0.07))}
+            onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
+          >
+            {adminMode && (
+              <Checkbox
+                checked={selectedIds.has(m.id)}
+                onCheckedChange={() => handleSelectToggle(m.id)}
+                style={{ marginTop: '4px', cursor: 'pointer' }}
+              />
+            )}
+
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginBottom: '8px' }}>
+                <Badge>{m.memory_kind || 'memory'}</Badge>
+                <Badge>{m.status || 'active'}</Badge>
+                <Badge style={{ background: VERACITY_COLOR[String(m.veracity).toLowerCase()] || MG(0.1) }}>{m.veracity}</Badge>
+                {m.degradation_label && <Badge>{m.degradation_label}</Badge>}
+                <span style={{ fontSize: '11px', color: MG(0.4) }}>imp:{safeNumber(m.importance, 2)}</span>
+                {m.session_id && (
+                  <button
+                    type="button"
+                    onClick={() => onInspectSession(m.session_id!)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      font: 'inherit',
+                      fontSize: '11px',
+                      fontFamily: 'var(--theme-font-mono)',
+                      color: MG(0.6),
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    session:{shortId(m.session_id)}
+                  </button>
+                )}
+                <span style={{ fontSize: '11px', color: MG(0.4) }}>{formatDateTimeLabel(m.created_at)}</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onInspectMemory(m)}
+                style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  font: 'inherit',
+                  fontSize: '13px',
+                  lineHeight: '1.6',
+                  cursor: 'pointer',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 3,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  color: 'inherit',
+                }}
+              >
+                {m.content}
+              </button>
+
+              {/* Reason badges */}
+              <div style={{ display: 'flex', gap: '4px', marginTop: '8px', flexWrap: 'wrap' }}>
+                {(selectedQueue === 'contaminated' || m.veracity !== 'stated') && <span style={{ fontSize: '10px', background: 'rgba(239,68,68,0.1)', color: '#f87171', padding: '2px 6px', borderRadius: '2px' }}>Needs review</span>}
+                {(selectedQueue === 'important_contaminated' || m.importance >= 0.75) && <span style={{ fontSize: '10px', background: 'rgba(245,158,11,0.1)', color: '#fbbf24', padding: '2px 6px', borderRadius: '2px' }}>High importance</span>}
+                {(selectedQueue === 'degraded' || (m.degradation_tier && m.degradation_tier > 1)) && <span style={{ fontSize: '10px', background: 'rgba(96,165,250,0.1)', color: '#60a5fa', padding: '2px 6px', borderRadius: '2px' }}>Degraded</span>}
+                {selectedQueue === 'due_degradation' && <span style={{ fontSize: '10px', background: 'rgba(167,139,250,0.1)', color: '#a78bfa', padding: '2px 6px', borderRadius: '2px' }}>Due for degradation</span>}
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {hasMore && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
+            <Button onClick={handleLoadMore} primary>{t('review.loadMore')}</Button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Header */}
@@ -192,8 +301,9 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
       {/* Stats Cards Row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
         {cards.map(card => (
-          <div
+          <button
             key={card.key}
+            type="button"
             onClick={() => { setSelectedQueue(card.key); setOffset(0); }}
             style={{
               padding: '12px',
@@ -205,14 +315,20 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
               flexDirection: 'column',
               justifyContent: 'space-between',
               minHeight: '80px',
+              width: '100%',
+              font: 'inherit',
+              color: 'inherit',
+              textAlign: 'left',
               transition: 'background 0.15s',
             }}
             onMouseEnter={e => { if (selectedQueue !== card.key) e.currentTarget.style.background = MG(0.06); }}
             onMouseLeave={e => { if (selectedQueue !== card.key) e.currentTarget.style.background = MG(0.03); }}
           >
-            <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: MG(0.45) }}>{card.title}</div>
-            <div style={{ fontSize: '24px', fontWeight: 700, marginTop: '8px' }}>{card.count.toLocaleString()}</div>
-          </div>
+            <div style={{ display: 'flex', width: '100%', flexDirection: 'column', justifyContent: 'space-between', height: '100%', alignItems: 'stretch' }}>
+              <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: MG(0.45) }}>{card.title}</div>
+              <div style={{ fontSize: '24px', fontWeight: 700, marginTop: '8px' }}>{card.count.toLocaleString()}</div>
+            </div>
+          </button>
         ))}
       </div>
 
@@ -341,81 +457,7 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
           </div>
         </div>
 
-        {loading && items.length === 0 ? (
-          <div style={{ padding: '60px', textAlign: 'center', color: MG(0.4) }}>{t('review.loadingTriage')}</div>
-        ) : items.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {items.map(m => (
-              <div
-                key={m.id}
-                style={{
-                  padding: '12px',
-                  borderRadius: '4px',
-                  background: MG(0.03),
-                  border: `1px solid ${MG(0.07)}`,
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '12px',
-                  transition: 'background 0.15s',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.background = MG(0.07))}
-                onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
-              >
-                {adminMode && (
-                  <Checkbox
-                    checked={selectedIds.has(m.id)}
-                    onCheckedChange={() => handleSelectToggle(m.id)}
-                    style={{ marginTop: '4px', cursor: 'pointer' }}
-                  />
-                )}
-
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginBottom: '8px' }}>
-                    <Badge>{m.memory_kind || 'memory'}</Badge>
-                    <Badge>{m.status || 'active'}</Badge>
-                    <Badge style={{ background: VERACITY_COLOR[String(m.veracity).toLowerCase()] || MG(0.1) }}>{m.veracity}</Badge>
-                    {m.degradation_label && <Badge>{m.degradation_label}</Badge>}
-                    <span style={{ fontSize: '11px', color: MG(0.4) }}>imp:{safeNumber(m.importance, 2)}</span>
-                    {m.session_id && (
-                      <span
-                        onClick={() => onInspectSession(m.session_id!)}
-                        style={{ fontSize: '11px', fontFamily: 'var(--theme-font-mono)', color: MG(0.6), cursor: 'pointer', textDecoration: 'underline' }}
-                      >
-                        session:{shortId(m.session_id)}
-                      </span>
-                    )}
-                    <span style={{ fontSize: '11px', color: MG(0.4) }}>{formatDateTimeLabel(m.created_at)}</span>
-                  </div>
-
-                  <div
-                    onClick={() => onInspectMemory(m)}
-                    style={{ fontSize: '13px', lineHeight: '1.6', cursor: 'pointer', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
-                  >
-                    {m.content}
-                  </div>
-
-                  {/* Reason badges */}
-                  <div style={{ display: 'flex', gap: '4px', marginTop: '8px', flexWrap: 'wrap' }}>
-                    {(selectedQueue === 'contaminated' || m.veracity !== 'stated') && <span style={{ fontSize: '10px', background: 'rgba(239,68,68,0.1)', color: '#f87171', padding: '2px 6px', borderRadius: '2px' }}>Needs review</span>}
-                    {(selectedQueue === 'important_contaminated' || m.importance >= 0.75) && <span style={{ fontSize: '10px', background: 'rgba(245,158,11,0.1)', color: '#fbbf24', padding: '2px 6px', borderRadius: '2px' }}>High importance</span>}
-                    {(selectedQueue === 'degraded' || (m.degradation_tier && m.degradation_tier > 1)) && <span style={{ fontSize: '10px', background: 'rgba(96,165,250,0.1)', color: '#60a5fa', padding: '2px 6px', borderRadius: '2px' }}>Degraded</span>}
-                    {selectedQueue === 'due_degradation' && <span style={{ fontSize: '10px', background: 'rgba(167,139,250,0.1)', color: '#a78bfa', padding: '2px 6px', borderRadius: '2px' }}>Due for degradation</span>}
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            {hasMore && (
-              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
-                <Button onClick={handleLoadMore} primary>{t('review.loadMore')}</Button>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div style={{ padding: '20px', border: `1px dashed ${MG(0.15)}`, borderRadius: '4px', textAlign: 'center', color: MG(0.35), fontSize: '12px' }}>
-            {t('review.noItems')}
-          </div>
-        )}
+        {renderReviewListContent()}
       </div>
     </div>
   );

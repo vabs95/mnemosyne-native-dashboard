@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, Button, Input, Tabs, TabsList, TabsTrigger } from '@hermes/sdk';
-import { safeNumber, shortId } from '../utils/format';
-import { t } from '../utils/i18n';
-import { API_BASE as API } from '../types';
+import { safeNumber, shortId } from '@/utils/format';
+import { t } from '@/utils/i18n';
+import { API_BASE as API } from '@/types';
 
 const MG = (o: number) => `rgba(234,234,234,${o})`;
 
@@ -113,12 +113,23 @@ export const MemoriaTab: React.FC<{
           {item.fact_type && <Badge>{item.fact_type}</Badge>}
           {item.importance && <Badge>imp:{safeNumber(item.importance, 2)}</Badge>}
           {item.session_id && item.session_id !== 'default' && (
-            <span
+            <button
+              type="button"
               onClick={() => onInspectSession(item.session_id)}
-              style={{ fontSize: '10px', fontFamily: 'var(--theme-font-mono)', color: MG(0.6), cursor: 'pointer', textDecoration: 'underline' }}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                font: 'inherit',
+                fontSize: '10px',
+                fontFamily: 'var(--theme-font-mono)',
+                color: MG(0.6),
+                cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
             >
               session:{shortId(item.session_id)}
-            </span>
+            </button>
           )}
         </div>
         <div style={{ fontSize: '13px' }}><strong>{key}</strong>{value ? `: ${value}` : ''}</div>
@@ -132,7 +143,7 @@ export const MemoriaTab: React.FC<{
     const date = item.date || '';
     return (
       <div
-        key={item.id || idx}
+        key={item.id || `${item.date || ''}-${item.description || ''}-${idx}`}
         style={{
           padding: '10px 12px',
           background: MG(0.03),
@@ -147,12 +158,23 @@ export const MemoriaTab: React.FC<{
           {date && <Badge>{date}</Badge>}
           {item.source && <Badge>{item.source}</Badge>}
           {item.session_id && item.session_id !== 'default' && (
-            <span
+            <button
+              type="button"
               onClick={() => onInspectSession(item.session_id)}
-              style={{ fontSize: '10px', fontFamily: 'var(--theme-font-mono)', color: MG(0.6), cursor: 'pointer', textDecoration: 'underline' }}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                font: 'inherit',
+                fontSize: '10px',
+                fontFamily: 'var(--theme-font-mono)',
+                color: MG(0.6),
+                cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
             >
               session:{shortId(item.session_id)}
-            </span>
+            </button>
           )}
         </div>
         <div style={{ fontSize: '13px' }}>{desc}</div>
@@ -182,12 +204,23 @@ export const MemoriaTab: React.FC<{
           {topic && <Badge>{topic}</Badge>}
           <Badge style={{ background: isActive ? '#065f46' : '#991b1b' }}>{isActive ? t('common.active') : t('common.inactive')}</Badge>
           {item.session_id && item.session_id !== 'default' && (
-            <span
+            <button
+              type="button"
               onClick={() => onInspectSession(item.session_id)}
-              style={{ fontSize: '10px', fontFamily: 'var(--theme-font-mono)', color: MG(0.6), cursor: 'pointer', textDecoration: 'underline' }}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                font: 'inherit',
+                fontSize: '10px',
+                fontFamily: 'var(--theme-font-mono)',
+                color: MG(0.6),
+                cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
             >
               session:{shortId(item.session_id)}
-            </span>
+            </button>
           )}
         </div>
         <div style={{ fontSize: '13px' }}>{instr}</div>
@@ -205,7 +238,7 @@ export const MemoriaTab: React.FC<{
 
     return (
       <div
-        key={item.id || idx}
+        key={item.id || `${String(content).slice(0, 30)}-${idx}`}
         style={{
           padding: '10px 12px',
           background: MG(0.03),
@@ -257,6 +290,48 @@ export const MemoriaTab: React.FC<{
     instructions: t('memoria.instructionsTitle'),
     kg: t('memoria.kgTitle'),
     preferences: t('memoria.preferencesTitle'),
+  };
+
+  const renderPanelListContent = (panel: typeof activePanel) => {
+    if (panel === 'overview') return null;
+    if (loadingList) {
+      return <div style={{ textAlign: 'center', color: MG(0.4), padding: '40px' }}>{panelSearchingLabels[panel]}</div>;
+    }
+    if (listData[panel].length === 0) {
+      return <div style={{ textAlign: 'center', padding: '20px', color: MG(0.35), fontSize: '12px' }}>{t('memoria.noData')}</div>;
+    }
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        {panel === 'facts' && listData.facts.map(renderFact)}
+        {panel === 'timelines' && listData.timelines.map((item, idx) => renderTimeline(item, idx))}
+        {panel === 'instructions' && listData.instructions.map(renderInstruction)}
+        {panel === 'preferences' && listData.preferences.map((item, idx) => renderPreference(item, idx))}
+        {panel === 'kg' && (
+          <Card style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${MG(0.15)}`, textAlign: 'left' }}>
+                  <th style={{ padding: '8px 12px' }}>{t('memoria.subject')}</th>
+                  <th style={{ padding: '8px 12px' }}>{t('memoria.predicate')}</th>
+                  <th style={{ padding: '8px 12px' }}>{t('memoria.object')}</th>
+                  <th style={{ padding: '8px 12px' }}>{t('memoria.confidence')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {listData.kg.map((item) => (
+                  <tr key={`${item.subject}-${item.predicate}-${item.object}`} style={{ borderBottom: `1px solid ${MG(0.06)}`, transition: 'background 0.15s' }} onMouseEnter={e => (e.currentTarget.style.background = MG(0.03))} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                    <td style={{ padding: '8px 12px' }}>{item.subject}</td>
+                    <td style={{ padding: '8px 12px' }}>{item.predicate}</td>
+                    <td style={{ padding: '8px 12px' }}>{item.object}</td>
+                    <td style={{ padding: '8px 12px' }}>{safeNumber(item.confidence, 2, '—')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -334,15 +409,27 @@ export const MemoriaTab: React.FC<{
                 <CardContent>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {stats?.top_sessions && stats.top_sessions.length > 0 ? (
-                      stats.top_sessions.map((s, i) => (
-                        <div
-                          key={i}
+                      stats.top_sessions.map((s) => (
+                        <button
+                          key={s.session_id}
+                          type="button"
                           onClick={() => onInspectSession(s.session_id)}
-                          style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', cursor: 'pointer' }}
+                          style={{
+                            display: 'flex',
+                            width: '100%',
+                            justifyContent: 'space-between',
+                            background: 'none',
+                            border: 'none',
+                            padding: 0,
+                            font: 'inherit',
+                            fontSize: '13px',
+                            cursor: 'pointer',
+                            color: 'inherit',
+                          }}
                         >
                           <span style={{ textDecoration: 'underline', fontFamily: 'var(--theme-font-mono)' }}>{shortId(s.session_id)}</span>
                           <strong>{s.count}</strong>
-                        </div>
+                        </button>
                       ))
                     ) : (
                       <div style={{ color: MG(0.35), fontSize: '12px' }}>{t('memoria.noSessionData')}</div>
@@ -373,42 +460,7 @@ export const MemoriaTab: React.FC<{
               />
               <Button onClick={() => handleSearch(panel)} primary>{t('memoria.search')}</Button>
             </div>
-            {loadingList ? (
-              <div style={{ textAlign: 'center', color: MG(0.4), padding: '40px' }}>{panelSearchingLabels[panel]}</div>
-            ) : listData[panel].length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {panel === 'facts' && listData.facts.map(renderFact)}
-                {panel === 'timelines' && listData.timelines.map(renderTimeline)}
-                {panel === 'instructions' && listData.instructions.map(renderInstruction)}
-                {panel === 'preferences' && listData.preferences.map(renderPreference)}
-                {panel === 'kg' && (
-                  <Card style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                      <thead>
-                        <tr style={{ borderBottom: `1px solid ${MG(0.15)}`, textAlign: 'left' }}>
-                          <th style={{ padding: '8px 12px' }}>{t('memoria.subject')}</th>
-                          <th style={{ padding: '8px 12px' }}>{t('memoria.predicate')}</th>
-                          <th style={{ padding: '8px 12px' }}>{t('memoria.object')}</th>
-                          <th style={{ padding: '8px 12px' }}>{t('memoria.confidence')}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {listData.kg.map((item, idx) => (
-                          <tr key={idx} style={{ borderBottom: `1px solid ${MG(0.06)}`, transition: 'background 0.15s' }} onMouseEnter={e => (e.currentTarget.style.background = MG(0.03))} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                            <td style={{ padding: '8px 12px' }}>{item.subject}</td>
-                            <td style={{ padding: '8px 12px' }}>{item.predicate}</td>
-                            <td style={{ padding: '8px 12px' }}>{item.object}</td>
-                            <td style={{ padding: '8px 12px' }}>{safeNumber(item.confidence, 2, '—')}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </Card>
-                )}
-              </div>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '20px', color: MG(0.35), fontSize: '12px' }}>{t('memoria.noData')}</div>
-            )}
+            {renderPanelListContent(panel)}
           </div>
         )
       ))}

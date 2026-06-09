@@ -22,12 +22,12 @@ export function getThree(): Promise<ThreeModule> {
   if (_pending) return _pending;
 
   let vendorPath = '/dashboard-plugins/mnemosyne-native-dashboard/dist/vendor/three.module.min.js';
-  const currentScript = typeof document !== 'undefined' ? (document.currentScript as HTMLScriptElement) : null;
-  if (currentScript && currentScript.src) {
+  const currentScript = typeof document === 'undefined' ? null : (document.currentScript as HTMLScriptElement);
+  if (currentScript?.src) {
     try {
       vendorPath = new URL('./vendor/three.module.min.js', currentScript.src).pathname;
-    } catch (e) {
-      // fallback
+    } catch (err) {
+      console.warn('Failed to resolve vendor path from script tag, using default', err);
     }
   }
 
@@ -43,7 +43,7 @@ export function getThree(): Promise<ThreeModule> {
     return mod;
   }).catch((err) => {
     _pending = null; // allow retry on next call
-    return Promise.reject(err);
+    throw err;
   });
 
   return _pending;

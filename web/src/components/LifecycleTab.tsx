@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardContent, Button, Badge } from '@hermes/sdk';
-import { formatDateTimeLabel, safeNumber, shortId } from '../utils/format';
-import { t } from '../utils/i18n';
-import { MemoryItem, API_BASE as API } from '../types';
+import { formatDateTimeLabel, safeNumber, shortId } from '@/utils/format';
+import { t } from '@/utils/i18n';
+import { MemoryItem, API_BASE as API } from '@/types';
 
 const MG = (o: number) => `rgba(234,234,234,${o})`;
 const VERACITY_COLOR: Record<string, string> = {
@@ -65,7 +65,7 @@ export const LifecycleTab: React.FC<{
           <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontSize: '12px', color: MG(0.7) }}>
             <span>{t('lifecycle.tier2After')} <strong>{thresholds?.tier2_days ?? 30} {t('lifecycle.days')}</strong></span>
             <span>{t('lifecycle.tier3After')} <strong>{thresholds?.tier3_days ?? 180} {t('lifecycle.days')}</strong></span>
-            <span>{t('lifecycle.weights')}: hot ×{safeNumber(weights['1'] ?? 1.0, 2)} · warm ×{safeNumber(weights['2'] ?? 0.5, 2)} · cold ×{safeNumber(weights['3'] ?? 0.25, 2)}</span>
+            <span>{t('lifecycle.weights')}: hot ×{safeNumber(weights['1'] ?? 1, 2)} · warm ×{safeNumber(weights['2'] ?? 0.5, 2)} · cold ×{safeNumber(weights['3'] ?? 0.25, 2)}</span>
             <span style={{ color: '#fbbf24' }}>{t('lifecycle.readOnlyNotice')}</span>
           </div>
         </CardContent>
@@ -74,8 +74,9 @@ export const LifecycleTab: React.FC<{
       {/* Cards Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
         {cards.map(card => (
-          <div
+          <button
             key={card.key}
+            type="button"
             onClick={() => {
               if (queues[card.key]?.filter) {
                 onApplyFilters(queues[card.key].filter);
@@ -91,17 +92,21 @@ export const LifecycleTab: React.FC<{
               flexDirection: 'column',
               justifyContent: 'space-between',
               minHeight: '100px',
+              font: 'inherit',
+              color: 'inherit',
+              textAlign: 'left',
+              width: '100%',
               transition: 'background 0.15s',
             }}
             onMouseEnter={e => (e.currentTarget.style.background = MG(0.06))}
             onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: MG(0.45) }}>{card.title}</div>
               <div style={{ fontSize: '24px', fontWeight: 700 }}>{card.count.toLocaleString()}</div>
             </div>
             <div style={{ fontSize: '11px', color: MG(0.4), marginTop: '8px', lineHeight: '1.4' }}>{card.description}</div>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -143,21 +148,47 @@ export const LifecycleTab: React.FC<{
                       {m.degradation_label && <Badge>{m.degradation_label}</Badge>}
                       <span style={{ color: MG(0.4) }}>imp:{safeNumber(m.importance, 2)}</span>
                       {m.session_id && (
-                        <span
+                        <button
+                          type="button"
                           onClick={() => onInspectSession(m.session_id!)}
-                          style={{ fontFamily: 'var(--theme-font-mono)', color: MG(0.6), cursor: 'pointer', textDecoration: 'underline' }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            padding: 0,
+                            font: 'inherit',
+                            fontFamily: 'var(--theme-font-mono)',
+                            color: MG(0.6),
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                          }}
                         >
                           session:{shortId(m.session_id)}
-                        </span>
+                        </button>
                       )}
                       <span style={{ color: MG(0.4) }}>{formatDateTimeLabel(m.created_at)}</span>
                     </div>
-                    <div
+                    <button
+                      type="button"
                       onClick={() => onInspectMemory(m)}
-                      style={{ fontSize: '13px', lineHeight: '1.5', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        textAlign: 'left',
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        font: 'inherit',
+                        fontSize: '13px',
+                        lineHeight: '1.5',
+                        cursor: 'pointer',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        color: 'inherit',
+                      }}
                     >
                       {m.content}
-                    </div>
+                    </button>
                   </div>
                 ))}
               </div>

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { fetchJSON, Card, CardContent, Button, Input, Badge, Tabs, TabsList, TabsTrigger } from '@hermes/sdk';
-import { t } from '../utils/i18n';
-import { safeNumber } from '../utils/format';
-import { Node, Edge, API_BASE } from '../types';
+import { t } from '@/utils/i18n';
+import { safeNumber } from '@/utils/format';
+import { Node, Edge, API_BASE } from '@/types';
 
 interface GraphData {
   nodes: Node[];
@@ -24,7 +24,6 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
   
   // Graph Panel State
   const [graphQuery, setGraphQuery] = useState('');
-  const [graphData, setGraphData] = useState<GraphData>({ nodes: [], edges: [] });
   const [processedNodes, setProcessedNodes] = useState<Node[]>([]);
   const [processedEdges, setProcessedEdges] = useState<Edge[]>([]);
   const [loadingGraph, setLoadingGraph] = useState(false);
@@ -37,7 +36,7 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
   const [loadingTriples, setLoadingTriples] = useState(false);
   
   // Modal for raw JSON inspection
-  const [inspectingJson, setInspectingJson] = useState<any | null>(null);
+  const [inspectingJson, setInspectingJson] = useState<object | null>(null);
 
   // Pan / Zoom state for SVG
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -99,7 +98,7 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
             const n2 = nodeMap.get(nodesList[j].id);
             const dx = n1.x - n2.x;
             const dy = n1.y - n2.y;
-            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            const dist = Math.hypot(dx, dy) || 1;
             if (dist < 320) {
               const force = (k * k) / dist * 0.45;
               const fx = (dx / dist) * force;
@@ -118,7 +117,7 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
           const n2 = nodeMap.get(edge.target);
           const dx = n1.x - n2.x;
           const dy = n1.y - n2.y;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const dist = Math.hypot(dx, dy) || 1;
           const force = (dist * dist) / k * 0.16;
           const fx = (dx / dist) * force;
           const fy = (dy / dist) * force;
@@ -129,15 +128,15 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
         }
 
         // 3. Central gravity + position updates with cooling temperature
-        const temp = 1.0 - (iter / iterations);
+        const temp = 1 - (iter / iterations);
         for (const n of nodeMap.values()) {
           const dx = n.x - cx;
           const dy = n.y - cy;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const dist = Math.hypot(dx, dy) || 1;
           n.vx -= (dx / dist) * 0.08 * k;
           n.vy -= (dy / dist) * 0.08 * k;
 
-          const vel = Math.sqrt(n.vx * n.vx + n.vy * n.vy) || 1;
+          const vel = Math.hypot(n.vx, n.vy) || 1;
           const maxDisp = 16 * temp;
           const disp = Math.min(maxDisp, vel);
           
@@ -155,8 +154,6 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
       }
 
       const mappedNodes = nodesList.map(n => nodeMap.get(n.id) as Node);
-
-      setGraphData(data);
       setProcessedNodes(mappedNodes);
       setProcessedEdges(filteredEdges);
     } catch (err) {
@@ -249,7 +246,9 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
       if (svgRef.current) {
         try {
           svgRef.current.releasePointerCapture(e.pointerId);
-        } catch (err) {}
+        } catch (err) {
+          console.debug('Failed to release pointer capture:', err);
+        }
       }
     }
   };
@@ -310,6 +309,28 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
   // Get connected edges/triples for a node
   const getConnectedEdges = (nodeId: string) => {
     return processedEdges.filter(e => e.source === nodeId || e.target === nodeId);
+  };
+
+  const renderTriplesContent = () => {
+    if (loadingTriples) {
+      return <tr><td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: 'rgba(234,234,234,0.4)' }}>{t('graph.searchingKg')}</td></tr>;
+    }
+    if (triples.length === 0) {
+      return <tr><td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: 'rgba(234,234,234,0.4)' }}>{t('graph.noTriplesMatch')}</td></tr>;
+    }
+    return triples.map(t_item => (
+      <tr key={t_item.id} style={{ borderBottom: '1px solid rgba(234,234,234,0.06)' }}
+        onMouseEnter={ev => (ev.currentTarget.style.background = 'rgba(234,234,234,0.04)')}
+        onMouseLeave={ev => (ev.currentTarget.style.background = '')}>
+        <td style={{ padding: '10px 12px', fontFamily: 'var(--theme-font-mono)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t_item.subject}>{t_item.subject}</td>
+        <td style={{ padding: '10px 12px', fontFamily: 'var(--theme-font-mono)', color: '#f59e0b', fontWeight: 600, maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t_item.predicate}>{t_item.predicate}</td>
+        <td style={{ padding: '10px 12px', fontFamily: 'var(--theme-font-mono)', maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t_item.object}>{t_item.object}</td>
+        <td style={{ padding: '10px 12px', fontFamily: 'var(--theme-font-mono)', textAlign: 'center' }}>{safeNumber(t_item.confidence, 2)}</td>
+        <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+          <Button ghost onClick={() => setInspectingJson(t_item)}>{t('common.details')}</Button>
+        </td>
+      </tr>
+    ));
   };
 
   return (
@@ -632,25 +653,7 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
                   </tr>
                 </thead>
                 <tbody>
-                  {loadingTriples ? (
-                    <tr><td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: 'rgba(234,234,234,0.4)' }}>{t('graph.searchingKg')}</td></tr>
-                  ) : triples.length === 0 ? (
-                    <tr><td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: 'rgba(234,234,234,0.4)' }}>{t('graph.noTriplesMatch')}</td></tr>
-                  ) : (
-                    triples.map(t_item => (
-                      <tr key={t_item.id} style={{ borderBottom: '1px solid rgba(234,234,234,0.06)' }}
-                        onMouseEnter={ev => (ev.currentTarget.style.background = 'rgba(234,234,234,0.04)')}
-                        onMouseLeave={ev => (ev.currentTarget.style.background = '')}>
-                        <td style={{ padding: '10px 12px', fontFamily: 'var(--theme-font-mono)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t_item.subject}>{t_item.subject}</td>
-                        <td style={{ padding: '10px 12px', fontFamily: 'var(--theme-font-mono)', color: '#f59e0b', fontWeight: 600, maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t_item.predicate}>{t_item.predicate}</td>
-                        <td style={{ padding: '10px 12px', fontFamily: 'var(--theme-font-mono)', maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t_item.object}>{t_item.object}</td>
-                        <td style={{ padding: '10px 12px', fontFamily: 'var(--theme-font-mono)', textAlign: 'center' }}>{safeNumber(t_item.confidence, 2)}</td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                          <Button ghost onClick={() => setInspectingJson(t_item)}>{t('common.details')}</Button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
+                  {renderTriplesContent()}
                 </tbody>
               </table>
             </div>

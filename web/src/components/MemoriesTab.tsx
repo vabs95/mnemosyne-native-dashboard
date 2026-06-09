@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, Button, Input, Select, SelectOption } from '@hermes/sdk';
-import { formatDateLabel, safeNumber, shortId } from '../utils/format';
-import { t } from '../utils/i18n';
-import { MemoryItem, API_BASE as API } from '../types';
+import { formatDateLabel, safeNumber, shortId } from '@/utils/format';
+import { t } from '@/utils/i18n';
+import { MemoryItem, API_BASE as API } from '@/types';
 
 const MG = (o: number) => `rgba(234,234,234,${o})`;
 
@@ -119,6 +119,61 @@ export const MemoriesTab: React.FC<MemoriesTabProps> = ({ onInspectMemory, onIns
   const handleSetExpiry = (id: string) => adminAction(`${API}/admin/memory/expiry`, { memory_id: id, valid_until: expiryDate, backup: true });
   const handleSetVeracity = (id: string, v: string) => adminAction(`${API}/admin/memory/veracity`, { memory_id: id, veracity: v, backup: true });
 
+  const renderMemoriesListContent = () => {
+    if (loading) {
+      return <div style={{ textAlign: 'center', padding: '40px', color: MG(0.4) }}>{t('memories.loadingList')}</div>;
+    }
+    if (memories.length === 0) {
+      return <div style={{ textAlign: 'center', padding: '20px', color: MG(0.35), fontSize: '12px' }}>{t('memories.noMatching')}</div>;
+    }
+    return memories.map(m => (
+      <button
+        key={m.id}
+        type="button"
+        onClick={() => setSelected(m)}
+        style={{
+          display: 'block',
+          width: '100%',
+          textAlign: 'left',
+          padding: '10px 12px', borderRadius: '4px', cursor: 'pointer',
+          background: selected?.id === m.id ? MG(0.08) : MG(0.03),
+          border: `1px solid ${selected?.id === m.id ? MG(0.2) : MG(0.07)}`,
+          transition: 'background 0.15s',
+          font: 'inherit',
+          color: 'inherit',
+        }}
+        onMouseEnter={e => { if (selected?.id !== m.id) e.currentTarget.style.background = MG(0.06); }}
+        onMouseLeave={e => { if (selected?.id !== m.id) e.currentTarget.style.background = MG(0.03); }}
+      >
+        <div style={{ fontSize: '12px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', marginBottom: '6px' }}>{m.content}</div>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <Badge>{m.veracity}</Badge>
+          <span style={{ fontSize: '10px', fontFamily: 'var(--theme-font-mono)', color: MG(0.4) }}>imp:{safeNumber(m.importance, 2, 'n/a')}</span>
+          {m.scope && <span style={{ fontSize: '10px', fontFamily: 'var(--theme-font-mono)', color: MG(0.4) }}>{m.scope}</span>}
+          {m.session_id && (
+            <button
+              type="button"
+              onClick={e => { e.stopPropagation(); onInspectSession(m.session_id!); }}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                font: 'inherit',
+                fontSize: '10px',
+                fontFamily: 'var(--theme-font-mono)',
+                color: MG(0.6),
+                cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
+            >
+              session:{shortId(m.session_id)}
+            </button>
+          )}
+        </div>
+      </button>
+    ));
+  };
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: '16px', alignItems: 'start' }}>
       {/* Left: Filters + List */}
@@ -228,41 +283,7 @@ export const MemoriesTab: React.FC<MemoriesTabProps> = ({ onInspectMemory, onIns
 
         {/* Memory list */}
         <div style={{ maxHeight: '600px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: MG(0.4) }}>{t('memories.loadingList')}</div>
-          ) : memories.length > 0 ? (
-            memories.map(m => (
-              <div
-                key={m.id}
-                onClick={() => setSelected(m)}
-                style={{
-                  padding: '10px 12px', borderRadius: '4px', cursor: 'pointer',
-                  background: selected?.id === m.id ? MG(0.08) : MG(0.03),
-                  border: `1px solid ${selected?.id === m.id ? MG(0.2) : MG(0.07)}`,
-                  transition: 'background 0.15s',
-                }}
-                onMouseEnter={e => { if (selected?.id !== m.id) e.currentTarget.style.background = MG(0.06); }}
-                onMouseLeave={e => { if (selected?.id !== m.id) e.currentTarget.style.background = MG(0.03); }}
-              >
-                <div style={{ fontSize: '12px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', marginBottom: '6px' }}>{m.content}</div>
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <Badge>{m.veracity}</Badge>
-                  <span style={{ fontSize: '10px', fontFamily: 'var(--theme-font-mono)', color: MG(0.4) }}>imp:{safeNumber(m.importance, 2, 'n/a')}</span>
-                  {m.scope && <span style={{ fontSize: '10px', fontFamily: 'var(--theme-font-mono)', color: MG(0.4) }}>{m.scope}</span>}
-                  {m.session_id && (
-                    <span
-                      onClick={e => { e.stopPropagation(); onInspectSession(m.session_id!); }}
-                      style={{ fontSize: '10px', fontFamily: 'var(--theme-font-mono)', color: MG(0.6), cursor: 'pointer', textDecoration: 'underline' }}
-                    >
-                      session:{shortId(m.session_id)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))
-          ) : (
-            <div style={{ textAlign: 'center', padding: '20px', color: MG(0.35), fontSize: '12px' }}>{t('memories.noMatching')}</div>
-          )}
+          {renderMemoriesListContent()}
         </div>
       </div>
 
@@ -292,12 +313,23 @@ export const MemoriesTab: React.FC<MemoriesTabProps> = ({ onInspectMemory, onIns
                 {selected.session_id && (
                   <div style={{ gridColumn: 'span 2' }}>
                     {t('common.session')}:{' '}
-                    <span
+                    <button
+                      type="button"
                       onClick={() => onInspectSession(selected.session_id!)}
-                      style={{ textDecoration: 'underline', cursor: 'pointer', color: MG(0.7), fontFamily: 'var(--theme-font-mono)' }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        font: 'inherit',
+                        fontSize: '12px',
+                        textDecoration: 'underline',
+                        cursor: 'pointer',
+                        color: MG(0.7),
+                        fontFamily: 'var(--theme-font-mono)',
+                      }}
                     >
                       {selected.session_id}
-                    </span>
+                    </button>
                   </div>
                 )}
                 <div style={{ gridColumn: 'span 2' }}>{t('memories.createdLabel')}: <span>{formatDateLabel(selected.created_at)}</span></div>

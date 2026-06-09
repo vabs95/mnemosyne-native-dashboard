@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Button, Checkbox } from '@hermes/sdk';
-import { safeNumber } from '../utils/format';
-import { t } from '../utils/i18n';
-import { API_BASE as API } from '../types';
+import { safeNumber } from '@/utils/format';
+import { t } from '@/utils/i18n';
+import { API_BASE as API } from '@/types';
 
 const MG = (o: number) => `rgba(234,234,234,${o})`;
 
@@ -30,6 +30,15 @@ interface SettingsTabProps {
   adminMode: boolean;
   onToggleAdminMode: (enabled: boolean) => void;
 }
+
+const StatusDot = ({ ok }: { ok: boolean }) => (
+  <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: ok ? '#4ade80' : '#f87171' }} />
+);
+
+const getStatusText = (ok: boolean | undefined) => {
+  if (ok === undefined) return 'N/A';
+  return ok ? 'OK' : 'Fail';
+};
 
 /**
  * SettingsTab Component
@@ -83,14 +92,52 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ adminMode, onToggleAdm
     }
   }
 
-  const StatusDot = ({ ok }: { ok: boolean }) => (
-    <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: ok ? '#4ade80' : '#f87171' }} />
-  );
-
   const exists = diagnostics?.exists ?? diagnostics?.db_exists ?? false;
   const readable = diagnostics?.readable ?? diagnostics?.db_readable ?? false;
   const writable = diagnostics?.writable ?? diagnostics?.db_writable;
   const fileSizeBytes = diagnostics?.size_bytes ?? diagnostics?.file_size_bytes ?? 0;
+
+  const renderDiagnosticsContent = () => {
+    if (loading) {
+      return <div style={{ color: MG(0.4), fontSize: '12px' }}>{t('settings.runningDiagnostics')}</div>;
+    }
+    if (!diagnostics) {
+      return <div style={{ color: MG(0.35), fontSize: '12px' }}>{t('settings.noDiagnostics')}</div>;
+    }
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', fontFamily: 'var(--theme-font-mono)' }}>
+        {[
+          { label: 'SQLite File Exists', ok: exists },
+          { label: 'Read Permission', ok: readable },
+          { label: 'Write Permission', ok: writable },
+        ].map(row => (
+          <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '6px', borderBottom: `1px solid ${MG(0.07)}` }}>
+            <span style={{ color: MG(0.5) }}>{row.label}</span>
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              <StatusDot ok={!!row.ok} />
+              <span>{getStatusText(row.ok)}</span>
+            </div>
+          </div>
+        ))}
+        <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '6px', borderBottom: `1px solid ${MG(0.07)}` }}>
+          <span style={{ color: MG(0.5) }}>{t('settings.size')}</span>
+          <span>{safeNumber(fileSizeBytes / 1024, 1, 'n/a')} KB</span>
+        </div>
+
+        <div style={{ paddingTop: '8px' }}>
+          <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: MG(0.4), marginBottom: '8px' }}>{t('settings.tableRows')}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
+            {Object.entries(diagnostics.table_counts).map(([tbl, count]) => (
+              <div key={tbl} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: MG(0.04), borderRadius: '4px', border: `1px solid ${MG(0.07)}` }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: '8px', color: MG(0.55) }}>{tbl}</span>
+                <span>{count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -133,43 +180,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ adminMode, onToggleAdm
         <Card>
           <CardHeader><CardTitle>{t('settings.databaseDiagnostics')}</CardTitle></CardHeader>
           <CardContent>
-            {loading ? (
-              <div style={{ color: MG(0.4), fontSize: '12px' }}>{t('settings.runningDiagnostics')}</div>
-            ) : diagnostics ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', fontFamily: 'var(--theme-font-mono)' }}>
-                {[
-                  { label: 'SQLite File Exists', ok: exists },
-                  { label: 'Read Permission', ok: readable },
-                  { label: 'Write Permission', ok: writable },
-                ].map(row => (
-                  <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '6px', borderBottom: `1px solid ${MG(0.07)}` }}>
-                    <span style={{ color: MG(0.5) }}>{row.label}</span>
-                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                      <StatusDot ok={!!row.ok} />
-                      <span>{row.ok == null ? 'N/A' : row.ok ? 'OK' : 'Fail'}</span>
-                    </div>
-                  </div>
-                ))}
-                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '6px', borderBottom: `1px solid ${MG(0.07)}` }}>
-                  <span style={{ color: MG(0.5) }}>{t('settings.size')}</span>
-                  <span>{safeNumber(fileSizeBytes / 1024, 1, 'n/a')} KB</span>
-                </div>
-
-                <div style={{ paddingTop: '8px' }}>
-                  <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: MG(0.4), marginBottom: '8px' }}>{t('settings.tableRows')}</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
-                    {Object.entries(diagnostics.table_counts).map(([tbl, count]) => (
-                      <div key={tbl} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: MG(0.04), borderRadius: '4px', border: `1px solid ${MG(0.07)}` }}>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: '8px', color: MG(0.55) }}>{tbl}</span>
-                        <span>{count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div style={{ color: MG(0.35), fontSize: '12px' }}>{t('settings.noDiagnostics')}</div>
-            )}
+            {renderDiagnosticsContent()}
           </CardContent>
         </Card>
       </div>
@@ -187,7 +198,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ adminMode, onToggleAdm
             <div style={{ maxHeight: '300px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px', fontFamily: 'var(--theme-font-mono)', fontSize: '11px' }}>
               {auditLogs.length > 0 ? (
                 auditLogs.map((log, i) => (
-                  <div key={i} style={{ padding: '8px 10px', background: MG(0.04), borderRadius: '4px', border: `1px solid ${MG(0.07)}` }}>
+                  <div key={`${log.timestamp}-${log.action}-${i}`} style={{ padding: '8px 10px', background: MG(0.04), borderRadius: '4px', border: `1px solid ${MG(0.07)}` }}>
                     <span style={{ color: MG(0.7), marginRight: '8px' }}>[{new Date(log.timestamp).toLocaleString()}]</span>
                     <strong style={{ textTransform: 'capitalize', color: MG(0.5), marginRight: '8px' }}>{log.action}:</strong>
                     <span>{log.details || log.memory_id}</span>

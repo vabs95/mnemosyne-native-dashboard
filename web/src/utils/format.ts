@@ -4,20 +4,41 @@ export function safeNumber(value: unknown, digits = 2, fallback = 'n/a'): string
 }
 
 export function formatDateTimeLabel(value: unknown, fallback = 'unknown'): string {
-  if (!value) return fallback;
-  const dt = new Date(String(value));
+  if (value === null || value === undefined) return fallback;
+  let dt: Date;
+  if (value instanceof Date) {
+    dt = value;
+  } else if (typeof value === 'string' || typeof value === 'number') {
+    dt = new Date(value);
+  } else {
+    dt = new Date(Number.NaN);
+  }
   return Number.isNaN(dt.getTime()) ? fallback : dt.toLocaleString();
 }
 
 export function formatDateLabel(value: unknown, fallback = 'unknown'): string {
-  if (!value) return fallback;
-  const dt = new Date(String(value));
+  if (value === null || value === undefined) return fallback;
+  let dt: Date;
+  if (value instanceof Date) {
+    dt = value;
+  } else if (typeof value === 'string' || typeof value === 'number') {
+    dt = new Date(value);
+  } else {
+    dt = new Date(Number.NaN);
+  }
   return Number.isNaN(dt.getTime()) ? fallback : dt.toLocaleDateString();
 }
 
 export function formatRelativeTime(value: unknown, fallback = 'unknown'): string {
-  if (!value) return fallback;
-  const dt = new Date(String(value));
+  if (value === null || value === undefined) return fallback;
+  let dt: Date;
+  if (value instanceof Date) {
+    dt = value;
+  } else if (typeof value === 'string' || typeof value === 'number') {
+    dt = new Date(value);
+  } else {
+    dt = new Date(Number.NaN);
+  }
   if (Number.isNaN(dt.getTime())) return fallback;
   const diffMs = Date.now() - dt.getTime();
   const diffMinutes = Math.floor(diffMs / 60000);
@@ -30,7 +51,6 @@ export function formatRelativeTime(value: unknown, fallback = 'unknown'): string
 }
 
 export function shortId(value: unknown, head = 8, tail = 6): string {
-  const s = String(value || '').trim();
+  const s = (typeof value === 'string' || typeof value === 'number') ? String(value).trim() : '';
   return s.length > head + tail + 1 ? `${s.slice(0, head)}…${s.slice(-tail)}` : s;
 }
-

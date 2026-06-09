@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge } from '@hermes/sdk';
-import { safeNumber } from '../utils/format';
-import { t } from '../utils/i18n';
-import { API_BASE as API } from '../types';
+import { safeNumber } from '@/utils/format';
+import { t } from '@/utils/i18n';
+import { API_BASE as API } from '@/types';
 
 const MG = (o: number) => `rgba(234,234,234,${o})`;
 
@@ -48,8 +48,8 @@ export const ContextBankTab: React.FC = () => {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
         {sections.length > 0 ? (
-          sections.map((section, idx) => (
-            <Card key={idx}>
+          sections.map((section) => (
+            <Card key={section.name}>
               <CardHeader>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <CardTitle>{section.name.replace(/_/g, ' ')}</CardTitle>
@@ -59,8 +59,8 @@ export const ContextBankTab: React.FC = () => {
               <CardContent>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {section.items && section.items.length > 0 ? (
-                    section.items.map((item, i) => (
-                      <div key={i} style={{
+                    section.items.map((item) => (
+                      <div key={item.id} style={{
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                         padding: '8px 10px', background: MG(0.04), borderRadius: '4px',
                         border: `1px solid ${MG(0.07)}`, fontSize: '12px',

@@ -1,5 +1,5 @@
 const esbuild = require('esbuild');
-const path = require('path');
+const path = require('node:path');
 
 // Plugin to map react and @hermes/sdk imports to global window objects
 const hermesSdkPlugin = {
@@ -100,7 +100,7 @@ const threeVendorPlugin = {
   },
 };
 
-const fs = require('fs');
+const fs = require('node:fs');
 
 // Build frontend asset bundle
 esbuild.build({

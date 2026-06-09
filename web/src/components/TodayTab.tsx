@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, Button, Input, Tabs, TabsList, TabsTrigger } from '@hermes/sdk';
-import { formatDateTimeLabel, safeNumber, shortId } from '../utils/format';
-import { t } from '../utils/i18n';
-import { MemoryItem, TripleItem, ConsolidationItem, API_BASE as API } from '../types';
+import { formatDateTimeLabel, safeNumber, shortId } from '@/utils/format';
+import { t } from '@/utils/i18n';
+import { MemoryItem, TripleItem, ConsolidationItem, API_BASE as API } from '@/types';
 
 const MG = (o: number) => `rgba(234,234,234,${o})`;
 const VERACITY_COLOR: Record<string, string> = {
@@ -153,14 +153,20 @@ export const TodayTab: React.FC<{
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {digest?.memories_added && digest.memories_added.length > 0 ? (
                   digest.memories_added.map(m => (
-                    <div
+                    <button
                       key={m.id}
+                      type="button"
                       onClick={() => onInspectMemory(m)}
                       style={{
+                        display: 'flex',
+                        width: '100%',
+                        textAlign: 'left',
                         padding: '10px 12px', borderRadius: '4px', cursor: 'pointer',
                         background: MG(0.03), border: `1px solid ${MG(0.07)}`,
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px',
+                        justifyContent: 'space-between', alignItems: 'center', gap: '12px',
                         transition: 'background 0.15s',
+                        font: 'inherit',
+                        color: 'inherit',
                       }}
                       onMouseEnter={e => (e.currentTarget.style.background = MG(0.07))}
                       onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
@@ -170,17 +176,28 @@ export const TodayTab: React.FC<{
                         <div style={{ display: 'flex', gap: '8px', marginTop: '4px', alignItems: 'center' }}>
                           <Badge style={{ background: VERACITY_COLOR[String(m.veracity).toLowerCase()] || MG(0.1) }}>{m.veracity}</Badge>
                           {m.session_id && (
-                            <span
+                            <button
+                              type="button"
                               onClick={e => { e.stopPropagation(); onInspectSession(m.session_id!); }}
-                              style={{ fontSize: '10px', fontFamily: 'var(--theme-font-mono)', color: MG(0.5), cursor: 'pointer', textDecoration: 'underline' }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: 0,
+                                font: 'inherit',
+                                fontSize: '10px',
+                                fontFamily: 'var(--theme-font-mono)',
+                                color: MG(0.5),
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                              }}
                             >
                               session:{shortId(m.session_id)}
-                            </span>
+                            </button>
                           )}
                           <span style={{ fontSize: '10px', color: MG(0.4) }}>imp:{safeNumber(m.importance, 2)}</span>
                         </div>
                       </div>
-                    </div>
+                    </button>
                   ))
                 ) : (
                   <div style={{ color: MG(0.35), fontSize: '12px', textAlign: 'center', padding: '20px' }}>{t('today.noAdded')}</div>
@@ -193,14 +210,20 @@ export const TodayTab: React.FC<{
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {digest?.memories_recalled && digest.memories_recalled.length > 0 ? (
                   digest.memories_recalled.map(m => (
-                    <div
+                    <button
                       key={m.id}
+                      type="button"
                       onClick={() => onInspectMemory(m)}
                       style={{
+                        display: 'flex',
+                        width: '100%',
+                        textAlign: 'left',
                         padding: '10px 12px', borderRadius: '4px', cursor: 'pointer',
                         background: MG(0.03), border: `1px solid ${MG(0.07)}`,
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px',
+                        justifyContent: 'space-between', alignItems: 'center', gap: '12px',
                         transition: 'background 0.15s',
+                        font: 'inherit',
+                        color: 'inherit',
                       }}
                       onMouseEnter={e => (e.currentTarget.style.background = MG(0.07))}
                       onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
@@ -210,17 +233,28 @@ export const TodayTab: React.FC<{
                         <div style={{ display: 'flex', gap: '8px', marginTop: '4px', alignItems: 'center' }}>
                           <Badge style={{ background: VERACITY_COLOR[String(m.veracity).toLowerCase()] || MG(0.1) }}>{m.veracity}</Badge>
                           {m.session_id && (
-                            <span
+                            <button
+                              type="button"
                               onClick={e => { e.stopPropagation(); onInspectSession(m.session_id!); }}
-                              style={{ fontSize: '10px', fontFamily: 'var(--theme-font-mono)', color: MG(0.5), cursor: 'pointer', textDecoration: 'underline' }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: 0,
+                                font: 'inherit',
+                                fontSize: '10px',
+                                fontFamily: 'var(--theme-font-mono)',
+                                color: MG(0.5),
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                              }}
                             >
                               session:{shortId(m.session_id)}
-                            </span>
+                            </button>
                           )}
                           <span style={{ fontSize: '10px', color: MG(0.4) }}>imp:{safeNumber(m.importance, 2)}</span>
                         </div>
                       </div>
-                    </div>
+                    </button>
                   ))
                 ) : (
                   <div style={{ color: MG(0.35), fontSize: '12px', textAlign: 'center', padding: '20px' }}>{t('today.noRecalled')}</div>
@@ -233,14 +267,20 @@ export const TodayTab: React.FC<{
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {digest?.triples_added && digest.triples_added.length > 0 ? (
                   digest.triples_added.map((tItem, idx) => (
-                    <div
+                    <button
                       key={tItem.id || idx}
+                      type="button"
                       onClick={() => onInspectJson(tItem, 'Triple detail')}
                       style={{
+                        display: 'block',
+                        width: '100%',
+                        textAlign: 'left',
                         padding: '10px 12px', borderRadius: '4px', cursor: 'pointer',
                         background: MG(0.03), border: `1px solid ${MG(0.07)}`,
                         fontSize: '12px',
                         transition: 'background 0.15s',
+                        font: 'inherit',
+                        color: 'inherit',
                       }}
                       onMouseEnter={e => (e.currentTarget.style.background = MG(0.07))}
                       onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
@@ -252,7 +292,7 @@ export const TodayTab: React.FC<{
                       <div>
                         <strong>{tItem.subject}</strong> — {tItem.predicate} → <strong>{tItem.object}</strong>
                       </div>
-                    </div>
+                    </button>
                   ))
                 ) : (
                   <div style={{ color: MG(0.35), fontSize: '12px', textAlign: 'center', padding: '20px' }}>{t('today.noTriples')}</div>
@@ -265,14 +305,20 @@ export const TodayTab: React.FC<{
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {digest?.consolidations && digest.consolidations.length > 0 ? (
                   digest.consolidations.map((cItem, idx) => (
-                    <div
+                    <button
                       key={cItem.id || idx}
+                      type="button"
                       onClick={() => onInspectJson(cItem, 'Consolidation detail')}
                       style={{
+                        display: 'block',
+                        width: '100%',
+                        textAlign: 'left',
                         padding: '10px 12px', borderRadius: '4px', cursor: 'pointer',
                         background: MG(0.03), border: `1px solid ${MG(0.07)}`,
                         fontSize: '12px',
                         transition: 'background 0.15s',
+                        font: 'inherit',
+                        color: 'inherit',
                       }}
                       onMouseEnter={e => (e.currentTarget.style.background = MG(0.07))}
                       onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
@@ -284,7 +330,7 @@ export const TodayTab: React.FC<{
                       <div>
                         <strong style={{ fontFamily: 'var(--theme-font-mono)' }}>{cItem.session_id}</strong>: {cItem.summary_preview}
                       </div>
-                    </div>
+                    </button>
                   ))
                 ) : (
                   <div style={{ color: MG(0.35), fontSize: '12px', textAlign: 'center', padding: '20px' }}>{t('today.noConsolidations')}</div>

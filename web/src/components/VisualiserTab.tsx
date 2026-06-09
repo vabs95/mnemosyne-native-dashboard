@@ -9,9 +9,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type * as THREEns from 'three';
 import { fetchJSON, Button, Badge, Card, CardHeader, CardTitle, CardContent } from '@hermes/sdk';
-import { safeNumber } from '../utils/format';
-import { t } from '../utils/i18n';
-import { getThree, type ThreeModule } from '../utils/threeLoader';
+import { safeNumber } from '@/utils/format';
+import { t } from '@/utils/i18n';
+import { getThree, type ThreeModule } from '@/utils/threeLoader';
 
 /* ─────────────────────────────── constants ─────────────────────────── */
 
@@ -65,8 +65,8 @@ const esc = (s: any) => String(s || '')
   .replace(/'/g, '&#039;');
 
 const cssHexToInt = (hex: string) => {
-  const m = String(hex || '').match(/^#([0-9a-f]{6})$/i);
-  return m ? parseInt(m[1], 16) : 0xffffff;
+  const m = /^#([0-9a-f]{6})$/i.exec(String(hex || ''));
+  return m ? Number.parseInt(m[1], 16) : 0xffffff;
 };
 
 const constellationColors = (isLight: boolean) => {
@@ -121,12 +121,20 @@ const neuralColors = (isLight: boolean) => {
 
 function getThemeColors(mode: VisualiserMode, isLight: boolean) {
   const c = mode === 'neural' ? neuralColors(isLight) : constellationColors(isLight);
-  const linkStr = mode === 'neural'
-    ? (isLight ? '#127464' : '#52d6b5')
-    : (isLight ? '#19416c' : '#c6e0ff');
-  const pulseStr = mode === 'neural'
-    ? (isLight ? '#6f6048' : '#fffaf0')
-    : (c as any).memory;
+  let linkStr = '';
+  if (mode === 'neural') {
+    linkStr = isLight ? '#127464' : '#52d6b5';
+  } else {
+    linkStr = isLight ? '#19416c' : '#c6e0ff';
+  }
+
+  let pulseStr = '';
+  if (mode === 'neural') {
+    pulseStr = isLight ? '#6f6048' : '#fffaf0';
+  } else {
+    pulseStr = (c as any).memory;
+  }
+
   return {
     bg: c.bg,
     star: c.star,
@@ -159,7 +167,7 @@ function buildThreePositions(data: any) {
     const cat = n.category || 'Other';
     const ci = catIndex[cat] || 0;
     const weight = Math.max(1, Number(n.weight || n.count || 1));
-    const shell = n.kind === 'memory' ? 1.12 : 0.74 + (ci % 3) * 0.10;
+    const shell = n.kind === 'memory' ? 1.12 : 0.74 + (ci % 3) * 0.1;
     const radius = 285 * shell + (i % 7) * 18 + Math.min(46, Math.sqrt(weight) * 5.5);
     const longitude = ((i * 137.508 + ci * 23) % 360) * Math.PI / 180;
     const latitudeSeed = (((i * 53 + ci * 29) % 101) + 0.5) / 101;
@@ -172,25 +180,40 @@ function buildThreePositions(data: any) {
     const sizeJitter = 1 + (((i * 37) % 11) - 5) * 0.035;
     n.size = Math.min(42, 9 + Math.sqrt(weight) * 6.2 + (n.kind === 'memory' ? 3.5 : 4.5)) * sizeJitter;
     n.twinkle = (i % 23) / 23;
-    const twinkleTier = i % 17 === 0 ? 2 : (i % 5 === 0 ? 1 : 0);
-    n.twinkleFreq = twinkleTier === 2 ? 0.0048 + ((i * 41) % 130) / 100000 : (twinkleTier === 1 ? 0.0024 + ((i * 47) % 120) / 100000 : 0.00125 + ((i * 53) % 110) / 100000);
-    n.twinkleAmp = twinkleTier === 2 ? 0.34 : (twinkleTier === 1 ? 0.24 : 0.15 + ((i * 29) % 70) / 1000);
+    
+    let twinkleTier = 0;
+    if (i % 17 === 0) {
+      twinkleTier = 2;
+    } else if (i % 5 === 0) {
+      twinkleTier = 1;
+    }
+
+    if (twinkleTier === 2) {
+      n.twinkleFreq = 0.0048 + ((i * 41) % 130) / 100000;
+      n.twinkleAmp = 0.34;
+    } else if (twinkleTier === 1) {
+      n.twinkleFreq = 0.0024 + ((i * 47) % 120) / 100000;
+      n.twinkleAmp = 0.24;
+    } else {
+      n.twinkleFreq = 0.00125 + ((i * 53) % 110) / 100000;
+      n.twinkleAmp = 0.15 + ((i * 29) % 70) / 1000;
+    }
+
     n._degree = 0;
     n._weight = weight;
   });
   return nodes;
 }
 
-function buildThreeNeuralPositions(data: any, vis: any) {
-  const nodes = (data.nodes || []).slice(0, 170).map((n: any) => ({ ...n }));
-  const nodeIds = new Set(nodes.map((n: any) => n.id));
-  const edges = (data.edges || []).filter((e: any) => nodeIds.has(e.source) && nodeIds.has(e.target)).slice(0, 340);
-  const categories = [...new Set(nodes.map((n: any) => n.category || 'Other'))];
-  const catIndex = Object.fromEntries(categories.map((c, i) => [c, i]));
-  const regionCount = Math.max(1, categories.length);
-  const regions = Object.fromEntries(categories.map((cat, i) => {
+function buildNeuralRegionsMap(categories: any[], regionCount: number) {
+  return Object.fromEntries(categories.map((cat, i) => {
     const angle = -Math.PI / 2 + (i / regionCount) * Math.PI * 2;
-    const radius = regionCount <= 2 ? 86 : (i === regionCount - 1 && regionCount > 5 ? 70 : 142 + (i % 2) * 18);
+    let radius = 142 + (i % 2) * 18;
+    if (regionCount <= 2) {
+      radius = 86;
+    } else if (i === regionCount - 1 && regionCount > 5) {
+      radius = 70;
+    }
     const lap = Math.floor(i / Math.max(1, regionCount));
     return [cat, {
       label: cat,
@@ -201,18 +224,17 @@ function buildThreeNeuralPositions(data: any, vis: any) {
       spread: 94 + (i % 4) * 10
     }];
   }));
-  const degree = new Map<string, number>();
-  edges.forEach((e: any) => {
-    degree.set(e.source, (degree.get(e.source) || 0) + 1);
-    degree.set(e.target, (degree.get(e.target) || 0) + 1);
-  });
-  const hubsByCategory: Record<string, any[]> = {};
-  nodes.filter((n: any) => n.kind !== 'memory').sort((a: any, b: any) => (Number(b.weight || b.count || 0) + (degree.get(b.id) || 0)) - (Number(a.weight || a.count || 0) + (degree.get(a.id) || 0))).forEach((n: any) => {
-    const cat = n.category || 'Other';
-    if (!hubsByCategory[cat]) hubsByCategory[cat] = [];
-    hubsByCategory[cat].push(n);
-  });
-  const byId = Object.fromEntries(nodes.map((n: any) => [n.id, n]));
+}
+
+function positionNeuralNodes(
+  nodes: any[],
+  regions: Record<string, any>,
+  degree: Map<string, number>,
+  hubsByCategory: Record<string, any[]>,
+  catIndex: Record<string, number>,
+  edges: any[],
+  byId: Record<string, any>
+) {
   nodes.forEach((n: any, i: number) => {
     const cat = n.category || 'Other';
     const region = regions[cat] || regions.Other || { cx: 0, cy: 0, cz: 0, angle: 0, spread: 80 };
@@ -221,7 +243,11 @@ function buildThreeNeuralPositions(data: any, vis: any) {
     const d = degree.get(n.id) || 0;
     if (n.kind === 'memory') {
       const linked = edges.find((e: any) => e.source === n.id || e.target === n.id);
-      const parent = linked ? byId[linked.source === n.id ? linked.target : linked.source] : null;
+      let parent = null;
+      if (linked) {
+        const targetId = linked.source === n.id ? linked.target : linked.source;
+        parent = byId[targetId];
+      }
       const parentX = parent && parent.kind !== 'memory' && Number.isFinite(parent.x) ? parent.x : region.cx;
       const parentY = parent && parent.kind !== 'memory' && Number.isFinite(parent.y) ? parent.y : region.cy;
       const parentZ = parent && parent.kind !== 'memory' && Number.isFinite(parent.z) ? parent.z : region.cz;
@@ -240,24 +266,63 @@ function buildThreeNeuralPositions(data: any, vis: any) {
       const radial = Math.sqrt(Math.max(0, 1 - yUnit * yUnit));
       n.x = region.cx + Math.cos(angle) * radial * orbit;
       n.y = region.cy + yUnit * orbit * 0.86;
-      n.z = region.cz + Math.sin(angle) * radial * orbit * 0.80;
+      n.z = region.cz + Math.sin(angle) * radial * orbit * 0.8;
     }
     n.size = Math.min(30, 8 + Math.sqrt(weight + d) * (n.kind === 'memory' ? 3.2 : 4.1));
     n._degree = d;
     n._weight = weight;
     n.neuralRegion = cat;
   });
+}
+
+function buildThreeNeuralPositions(data: any, vis: any) {
+  const nodes = (data.nodes || []).slice(0, 170).map((n: any) => ({ ...n }));
+  const nodeIds = new Set(nodes.map((n: any) => n.id));
+  const edges = (data.edges || []).filter((e: any) => nodeIds.has(e.source) && nodeIds.has(e.target)).slice(0, 340);
+  const categories = [...new Set(nodes.map((n: any) => n.category || 'Other'))];
+  const catIndex = Object.fromEntries(categories.map((c, i) => [c, i]));
+  const regionCount = Math.max(1, categories.length);
+  const regions = buildNeuralRegionsMap(categories, regionCount);
+  const degree = new Map<string, number>();
+  edges.forEach((e: any) => {
+    degree.set(e.source, (degree.get(e.source) || 0) + 1);
+    degree.set(e.target, (degree.get(e.target) || 0) + 1);
+  });
+  const hubsByCategory: Record<string, any[]> = {};
+  nodes.filter((n: any) => n.kind !== 'memory').sort((a: any, b: any) => (Number(b.weight || b.count || 0) + (degree.get(b.id) || 0)) - (Number(a.weight || a.count || 0) + (degree.get(a.id) || 0))).forEach((n: any) => {
+    const cat = n.category || 'Other';
+    if (!hubsByCategory[cat]) hubsByCategory[cat] = [];
+    hubsByCategory[cat].push(n);
+  });
+  const byId = Object.fromEntries(nodes.map((n: any) => [n.id, n]));
+  
+  positionNeuralNodes(nodes, regions, degree, hubsByCategory, catIndex, edges, byId);
+  
   vis.neuralRegions = Object.values(regions);
   return nodes;
 }
 
-function limitedThreeEdges(data: any, byId: Map<string, any>, isNeural: boolean, mobile: boolean = false) {
+function limitedThreeEdges(data: any, byId: Map<string, any>, isNeural: boolean, mobile = false) {
   const degree = new Map<string, number>();
   const out: any[] = [];
-  const limit = isNeural ? 132 : (mobile ? 92 : 140);
-  const degreeLimit = isNeural ? 5 : (mobile ? 3 : 4);
+  
+  let limit = 140;
+  if (isNeural) {
+    limit = 132;
+  } else if (mobile) {
+    limit = 92;
+  }
+
+  let degreeLimit = 4;
+  if (isNeural) {
+    degreeLimit = 5;
+  } else if (mobile) {
+    degreeLimit = 3;
+  }
+
   for (const e of (data.edges || [])) {
-    const a = byId.get(e.source), b = byId.get(e.target);
+    const a = byId.get(e.source);
+    const b = byId.get(e.target);
     if (!a || !b) continue;
     const da = degree.get(e.source) || 0;
     const db = degree.get(e.target) || 0;
@@ -272,28 +337,31 @@ function limitedThreeEdges(data: any, byId: Map<string, any>, isNeural: boolean,
   return out;
 }
 
+function addNeuralCurvePoints(positions: number[], ax: number, ay: number, az: number, bx: number, by: number, bz: number, i: number) {
+  const dx = bx - ax, dy = by - ay, dz = bz - az;
+  const len = Math.max(1, Math.hypot(dx, dy, dz));
+  const bend = (i % 2 ? 1 : -1) * Math.min(58, 18 + len * 0.12);
+  const cx = (ax + bx) / 2 + (-dy / len) * bend;
+  const cy = (ay + by) / 2 + (dx / len) * bend * 0.55 + Math.sin(i * 0.71) * 18;
+  const cz = (az + bz) / 2 + Math.cos(i * 0.53) * bend * 0.72;
+  let px = ax, py = ay, pz = az;
+  for (let step = 1; step <= 7; step++) {
+    const tVal = step / 7;
+    const inv = 1 - tVal;
+    const x = inv * inv * ax + 2 * inv * tVal * cx + tVal * tVal * bx;
+    const y = inv * inv * ay + 2 * inv * tVal * cy + tVal * tVal * by;
+    const z = inv * inv * az + 2 * inv * tVal * cz + tVal * tVal * bz;
+    positions.push(px, py, pz, x, y, z);
+    px = x; py = y; pz = z;
+  }
+  return { cx, cy, cz };
+}
+
 function buildThreeLinkSegments(THREE: ThreeModule, edges: any[], isNeural: boolean) {
   const positions: number[] = [];
   edges.forEach((e: any, i: number) => {
     if (isNeural) {
-      const ax = e.a.x, ay = e.a.y, az = e.a.z, bx = e.b.x, by = e.b.y, bz = e.b.z;
-      const dx = bx - ax, dy = by - ay, dz = bz - az;
-      const len = Math.max(1, Math.hypot(dx, dy, dz));
-      const bend = (i % 2 ? 1 : -1) * Math.min(58, 18 + len * 0.12);
-      const cx = (ax + bx) / 2 + (-dy / len) * bend;
-      const cy = (ay + by) / 2 + (dx / len) * bend * 0.55 + Math.sin(i * 0.71) * 18;
-      const cz = (az + bz) / 2 + Math.cos(i * 0.53) * bend * 0.72;
-      e._curve = { cx, cy, cz };
-      let px = ax, py = ay, pz = az;
-      for (let step = 1; step <= 7; step++) {
-        const tVal = step / 7;
-        const inv = 1 - tVal;
-        const x = inv * inv * ax + 2 * inv * tVal * cx + tVal * tVal * bx;
-        const y = inv * inv * ay + 2 * inv * tVal * cy + tVal * tVal * by;
-        const z = inv * inv * az + 2 * inv * tVal * cz + tVal * tVal * bz;
-        positions.push(px, py, pz, x, y, z);
-        px = x; py = y; pz = z;
-      }
+      e._curve = addNeuralCurvePoints(positions, e.a.x, e.a.y, e.a.z, e.b.x, e.b.y, e.b.z, i);
     } else {
       positions.push(e.a.x, e.a.y, e.a.z, e.b.x, e.b.y, e.b.z);
     }
@@ -305,6 +373,69 @@ function buildThreeLinkSegments(THREE: ThreeModule, edges: any[], isNeural: bool
 
 const _pointTexCache = new Map<string, THREEns.CanvasTexture>();
 
+function drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 60);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.28, 'rgba(255,255,255,0.92)');
+  g.addColorStop(0.58, 'rgba(255,255,255,0.38)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 60, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.72)'; ctx.lineWidth = 1.3;
+  ctx.beginPath(); ctx.moveTo(cx, 14); ctx.lineTo(cx, 114); ctx.moveTo(14, cy); ctx.lineTo(114, cy); ctx.stroke();
+}
+
+function drawNeuron(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 62);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.13, 'rgba(255,255,255,0.94)');
+  g.addColorStop(0.42, 'rgba(255,255,255,0.28)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 61, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2 + 0.13;
+    const len = 22 + (i % 4) * 4;
+    const fork = len * 0.62;
+    const sx = cx + Math.cos(a) * 13, sy = cy + Math.sin(a) * 13;
+    const mx = cx + Math.cos(a + 0.1 * Math.sin(i)) * fork, my = cy + Math.sin(a + 0.1 * Math.sin(i)) * fork;
+    const ex = cx + Math.cos(a) * len, ey = cy + Math.sin(a) * len;
+    ctx.lineWidth = i % 3 === 0 ? 2.25 : 1.45;
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.quadraticCurveTo(mx, my, ex, ey); ctx.stroke();
+    ctx.lineWidth = 0.9;
+    ctx.globalAlpha = 0.72;
+    ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(cx + Math.cos(a + 0.38) * len * 0.66, cy + Math.sin(a + 0.38) * len * 0.66); ctx.stroke();
+    if (i % 3 === 0) { ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(cx + Math.cos(a - 0.34) * len * 0.6, cy + Math.sin(a - 0.34) * len * 0.6); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+  }
+  ctx.fillStyle = 'rgba(255,255,255,0.98)'; ctx.beginPath(); ctx.arc(cx, cy, 34, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.54)'; ctx.beginPath(); ctx.arc(cx - 8, cy - 9, 8, 0, Math.PI * 2); ctx.fill();
+}
+
+function drawSoma(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 62);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.18, 'rgba(255,255,255,0.96)');
+  g.addColorStop(0.42, 'rgba(255,255,255,0.34)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 62, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.68)'; ctx.lineCap = 'round'; ctx.lineWidth = 1.55;
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + 0.22, len = 21 + (i % 2) * 4;
+    ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * 18, cy + Math.sin(a) * 18); ctx.lineTo(cx + Math.cos(a) * len, cy + Math.sin(a) * len); ctx.stroke();
+  }
+  ctx.lineWidth = 3.4; ctx.beginPath(); ctx.arc(cx, cy, 40, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,1)'; ctx.beginPath(); ctx.arc(cx, cy, 35, 0, Math.PI * 2); ctx.fill();
+}
+
+function drawOrb(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 60);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.44, 'rgba(255,255,255,0.82)');
+  g.addColorStop(0.78, 'rgba(255,255,255,0.22)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 60, 0, Math.PI * 2); ctx.fill();
+}
+
 function makePointTexture(THREE: ThreeModule, kind: 'star' | 'neuron' | 'soma' | 'orb'): THREEns.CanvasTexture {
   const key = `${kind}`;
   if (_pointTexCache.has(key)) return _pointTexCache.get(key)!;
@@ -313,60 +444,13 @@ function makePointTexture(THREE: ThreeModule, kind: 'star' | 'neuron' | 'soma' |
   const ctx = canvas.getContext('2d')!;
   const cx = 64, cy = 64;
   if (kind === 'star') {
-    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 60);
-    g.addColorStop(0, 'rgba(255,255,255,1)');
-    g.addColorStop(0.28, 'rgba(255,255,255,.92)');
-    g.addColorStop(0.58, 'rgba(255,255,255,.38)');
-    g.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 60, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,.72)'; ctx.lineWidth = 1.3;
-    ctx.beginPath(); ctx.moveTo(cx, 14); ctx.lineTo(cx, 114); ctx.moveTo(14, cy); ctx.lineTo(114, cy); ctx.stroke();
+    drawStar(ctx, cx, cy);
   } else if (kind === 'neuron') {
-    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 62);
-    g.addColorStop(0, 'rgba(255,255,255,1)');
-    g.addColorStop(0.13, 'rgba(255,255,255,.94)');
-    g.addColorStop(0.42, 'rgba(255,255,255,.28)');
-    g.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 61, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,.70)'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    for (let i = 0; i < 9; i++) {
-      const a = (i / 9) * Math.PI * 2 + 0.13;
-      const len = 22 + (i % 4) * 4;
-      const fork = len * 0.62;
-      const sx = cx + Math.cos(a) * 13, sy = cy + Math.sin(a) * 13;
-      const mx = cx + Math.cos(a + 0.10 * Math.sin(i)) * fork, my = cy + Math.sin(a + 0.10 * Math.sin(i)) * fork;
-      const ex = cx + Math.cos(a) * len, ey = cy + Math.sin(a) * len;
-      ctx.lineWidth = i % 3 === 0 ? 2.25 : 1.45;
-      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.quadraticCurveTo(mx, my, ex, ey); ctx.stroke();
-      ctx.lineWidth = 0.9;
-      ctx.globalAlpha = 0.72;
-      ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(cx + Math.cos(a + 0.38) * len * 0.66, cy + Math.sin(a + 0.38) * len * 0.66); ctx.stroke();
-      if (i % 3 === 0) { ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(cx + Math.cos(a - 0.34) * len * 0.60, cy + Math.sin(a - 0.34) * len * 0.60); ctx.stroke(); }
-      ctx.globalAlpha = 1;
-    }
-    ctx.fillStyle = 'rgba(255,255,255,.98)'; ctx.beginPath(); ctx.arc(cx, cy, 34, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,.54)'; ctx.beginPath(); ctx.arc(cx - 8, cy - 9, 8, 0, Math.PI * 2); ctx.fill();
+    drawNeuron(ctx, cx, cy);
   } else if (kind === 'soma') {
-    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 62);
-    g.addColorStop(0, 'rgba(255,255,255,1)');
-    g.addColorStop(0.18, 'rgba(255,255,255,.96)');
-    g.addColorStop(0.42, 'rgba(255,255,255,.34)');
-    g.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 62, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,.68)'; ctx.lineCap = 'round'; ctx.lineWidth = 1.55;
-    for (let i = 0; i < 5; i++) {
-      const a = (i / 5) * Math.PI * 2 + 0.22, len = 21 + (i % 2) * 4;
-      ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * 18, cy + Math.sin(a) * 18); ctx.lineTo(cx + Math.cos(a) * len, cy + Math.sin(a) * len); ctx.stroke();
-    }
-    ctx.lineWidth = 3.4; ctx.beginPath(); ctx.arc(cx, cy, 40, 0, Math.PI * 2); ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,1)'; ctx.beginPath(); ctx.arc(cx, cy, 35, 0, Math.PI * 2); ctx.fill();
+    drawSoma(ctx, cx, cy);
   } else {
-    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 60);
-    g.addColorStop(0, 'rgba(255,255,255,1)');
-    g.addColorStop(0.44, 'rgba(255,255,255,.82)');
-    g.addColorStop(0.78, 'rgba(255,255,255,.22)');
-    g.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 60, 0, Math.PI * 2); ctx.fill();
+    drawOrb(ctx, cx, cy);
   }
   const tex = new THREE.CanvasTexture(canvas);
   tex.needsUpdate = true;
@@ -401,8 +485,14 @@ function addPoints(THREE: ThreeModule, vis: any, scene: THREEns.Scene | THREEns.
   geometry.setAttribute('aAmp', new THREE.BufferAttribute(amps, 1));
   geometry.setAttribute('aMajor', new THREE.BufferAttribute(majors, 1));
   
-  const isLight = document.documentElement.getAttribute('data-theme') === 'light' || document.documentElement.dataset.theme === 'light';
+  const isLight = document.documentElement.dataset.theme === 'light';
   const themeColors = vis.mode === 'neural' ? neuralColors(isLight) : constellationColors(isLight);
+  let opacity;
+  if (kind === 'memory') {
+    opacity = themeColors.light ? 0.88 : 0.98;
+  } else {
+    opacity = themeColors.light ? 0.76 : 0.86;
+  }
   let material: THREEns.Material;
   if (vis.mode === 'neural') {
     material = new THREE.PointsMaterial({
@@ -412,7 +502,7 @@ function addPoints(THREE: ThreeModule, vis: any, scene: THREEns.Scene | THREEns.
       size,
       sizeAttenuation: true,
       transparent: true,
-      opacity: kind === 'memory' ? (themeColors.light ? 0.88 : 0.98) : (themeColors.light ? 0.76 : 0.86),
+      opacity,
       depthWrite: false,
       blending: themeColors.light ? THREE.NormalBlending : THREE.AdditiveBlending
     });
@@ -497,11 +587,18 @@ function addHaloPoints(THREE: ThreeModule, vis: any, scene: THREEns.Scene | THRE
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   
-  const isLight = document.documentElement.getAttribute('data-theme') === 'light' || document.documentElement.dataset.theme === 'light';
+  const isLight = document.documentElement.dataset.theme === 'light';
   const themeColors = vis.mode === 'neural' ? neuralColors(isLight) : constellationColors(isLight);
-  const opacity = vis.mode === 'neural'
-    ? (kind === 'memory' ? (themeColors.light ? 0.16 : 0.28) : (themeColors.light ? 0.18 : 0.34))
-    : (kind === 'memory' ? (themeColors.light ? 0.12 : 0.24) : (themeColors.light ? 0.13 : 0.26));
+  let opacity;
+  if (vis.mode === 'neural' && kind === 'memory') {
+    opacity = themeColors.light ? 0.16 : 0.28;
+  } else if (vis.mode === 'neural') {
+    opacity = themeColors.light ? 0.18 : 0.34;
+  } else if (kind === 'memory') {
+    opacity = themeColors.light ? 0.12 : 0.24;
+  } else {
+    opacity = themeColors.light ? 0.13 : 0.26;
+  }
   const material = new THREE.PointsMaterial({
     color,
     map: makePointTexture(THREE, 'orb'),
@@ -577,7 +674,12 @@ function addNeuralDendrites(THREE: ThreeModule, group: THREEns.Group, nodes: any
 
 function neuralAuraOverlay(regions: any[]) {
   const regionList = (regions || []).slice(0, 9);
-  return `<div class="three-aura-layer-container">${regionList.map((r: any) => `<span class="three-aura-oval-item" data-region="${esc(r.label || '')}" style="opacity:0;transform:translate(-50%,-50%) rotate(${(Number(r.angle || 0) * 28).toFixed(1)}deg)"></span>`).join('')}</div>`;
+  const innerHtml = regionList.map((r: any) => {
+    const label = esc(r.label || '');
+    const deg = (Number(r.angle || 0) * 28).toFixed(1);
+    return '<span class="three-aura-oval-item" data-region="' + label + '" style="opacity:0;transform:translate(-50%,-50%) rotate(' + deg + 'deg)"></span>';
+  }).join('');
+  return '<div class="three-aura-layer-container">' + innerHtml + '</div>';
 }
 
 function visualiserResponsiveFill(width: number, height: number) {
@@ -614,7 +716,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
     edgePairs: [] as any[],
     labels: [] as any[],
     pulses: [] as any[],
-    frame: 0 as number,
+    frame: 0,
     paused: false,
     panMode: false,
     drag: null as any,
@@ -640,7 +742,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
   const [sceneError, setSceneError]     = useState('');
   const [data, setData]                 = useState<any>(null);
   const [mode, setMode]                 = useState<VisualiserMode>(() => {
-    const s = window.localStorage.getItem('mnemosyne-dashboard-visualiser-mode');
+    const s = globalThis.localStorage.getItem('mnemosyne-dashboard-visualiser-mode');
     return s === 'neural' ? 'neural' : 'constellation';
   });
   const [paused, setPaused]             = useState(false);
@@ -663,7 +765,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
 
   // Details fetch
   useEffect(() => {
-    if (selectedNode && selectedNode.kind === 'memory' && selectedNode.memory_id) {
+    if (selectedNode?.kind === 'memory' && selectedNode.memory_id) {
       setLoadingDetail(true);
       fetchJSON(`${API}/memory?id=${selectedNode.memory_id}`)
         .then((res: any) => {
@@ -682,7 +784,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
   }, [selectedNode]);
 
   /* ─────────── clamp camera ─────────── */
-  const clampThreeCamera = () => {
+  const clampThreeCamera = useCallback(() => {
     const vis = threeVisRef.current;
     const rect = mountRef.current?.getBoundingClientRect() || { width: 680, height: 680 };
     const fallbackZ = vis.mode === 'neural' ? 600 : 760;
@@ -695,10 +797,10 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
     const panLimitY = Math.max(120, rect.height * (0.34 + zoomFactor * 0.12));
     vis.panX = Math.max(-panLimitX, Math.min(panLimitX, Number.isFinite(vis.panX) ? vis.panX : 0));
     vis.panY = Math.max(-panLimitY, Math.min(panLimitY, Number.isFinite(vis.panY) ? vis.panY : 0));
-  };
+  }, []);
 
   /* ─────────── update HTML labels & ovals ─────────── */
-  const updateThreeAuras = (rect: { width: number; height: number }, v: THREEns.Vector3) => {
+  const updateThreeAuras = useCallback((rect: { width: number; height: number }, v: THREEns.Vector3) => {
     const vis = threeVisRef.current;
     if (vis.mode !== 'neural' || !labelsRef.current) return;
     const mobile = rect.width < 520;
@@ -738,9 +840,41 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
       el.style.height = `${h}px`;
       el.style.opacity = screens.length > 4 ? '0.42' : '0.28';
     });
+  }, []);
+
+  const updateSingleLabel = (
+    el: HTMLSpanElement,
+    i: number,
+    vis: any,
+    rect: { width: number; height: number },
+    time: number,
+    labelBoxes: { x: number; y: number; w: number; h: number }[],
+    maxLabels: number,
+    v: THREEns.Vector3
+  ) => {
+    const n = vis.labels[i];
+    if (!n) return;
+    v.set(n.x, n.y, n.z).applyMatrix4(vis.group!.matrixWorld).project(vis.camera!);
+    const sx = (v.x * 0.5 + 0.5) * rect.width;
+    const sy = (-v.y * 0.5 + 0.5) * rect.height;
+    const visible = v.z < 1 && v.z > -1 && sx > 8 && sx < rect.width - 8 && sy > 8 && sy < rect.height - 8;
+    const pulse = vis.mode === 'neural' && i > 3 ? Math.sin(time * 0.00032 + i * 1.73) : 1;
+    const box = { x: sx - 54, y: sy - 13, w: 108, h: 24 };
+    const collides = labelBoxes.some(b => !(box.x + box.w < b.x || b.x + b.w < box.x || box.y + box.h < b.y || b.y + b.h < box.y));
+    const show = visible && labelBoxes.length < maxLabels && !collides && (vis.mode !== 'neural' || i <= 3 || pulse > 0.08);
+    
+    el.style.display = show ? '' : 'none';
+    if (show) {
+      labelBoxes.push(box);
+      el.style.left = `${sx}px`;
+      el.style.top = `${sy}px`;
+      const depthAlpha = Math.max(0.32, Math.min(0.86, 1 - Math.abs(v.z) * 0.35));
+      const pulseAlpha = vis.mode === 'neural' && i > 3 ? Math.min(0.78, 0.38 + pulse * 0.36) : depthAlpha;
+      el.style.opacity = String(Math.min(depthAlpha, pulseAlpha));
+    }
   };
 
-  const updateThreeLabels = (rect: { width: number; height: number }, time: number) => {
+  const updateThreeLabels = useCallback((rect: { width: number; height: number }, time: number) => {
     const vis = threeVisRef.current;
     if (!vis.camera || !vis.group || !labelsRef.current) return;
     const THREE = vis.THREE!;
@@ -754,35 +888,24 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
       ? Math.max(0, Math.min(1, (900 - effectiveCameraZ) / 420))
       : Math.max(0, Math.min(1, (760 - effectiveCameraZ) / 520));
     
-    const maxLabels = vis.mode === 'neural'
-      ? ((rect.width < 520 ? 14 : 24) + Math.round(zoomReveal * (rect.width < 520 ? 14 : 18)))
-      : (rect.width < 520 ? (12 + Math.round(zoomReveal * 12)) : (20 + Math.round(zoomReveal * 18)));
-      
-    let shown = 0;
-    labelsRef.current.querySelectorAll<HTMLSpanElement>('.three-label-item').forEach((el, i) => {
-      const n = vis.labels[i];
-      if (!n) return;
-      v.set(n.x, n.y, n.z).applyMatrix4(vis.group!.matrixWorld).project(vis.camera!);
-      const sx = (v.x * 0.5 + 0.5) * rect.width;
-      const sy = (-v.y * 0.5 + 0.5) * rect.height;
-      const visible = v.z < 1 && v.z > -1 && sx > 8 && sx < rect.width - 8 && sy > 8 && sy < rect.height - 8;
-      const pulse = vis.mode === 'neural' && i > 3 ? Math.sin(time * 0.00032 + i * 1.73) : 1;
-      const box = { x: sx - 54, y: sy - 13, w: 108, h: 24 };
-      const collides = labelBoxes.some(b => !(box.x + box.w < b.x || b.x + b.w < box.x || box.y + box.h < b.y || b.y + b.h < box.y));
-      const show = visible && shown < maxLabels && !collides && (vis.mode !== 'neural' || i <= 3 || pulse > 0.08);
-      
-      el.style.display = show ? '' : 'none';
-      if (show) {
-        shown++;
-        labelBoxes.push(box);
-        el.style.left = `${sx}px`;
-        el.style.top = `${sy}px`;
-        const depthAlpha = Math.max(0.32, Math.min(0.86, 1 - Math.abs(v.z) * 0.35));
-        const pulseAlpha = vis.mode === 'neural' && i > 3 ? Math.min(0.78, 0.38 + pulse * 0.36) : depthAlpha;
-        el.style.opacity = String(Math.min(depthAlpha, pulseAlpha));
+    let maxLabels;
+    const isMobile = rect.width < 520;
+    if (vis.mode === 'neural') {
+      const base = isMobile ? 14 : 24;
+      const factor = isMobile ? 14 : 18;
+      maxLabels = base + Math.round(zoomReveal * factor);
+    } else {
+      if (isMobile) {
+        maxLabels = 12 + Math.round(zoomReveal * 12);
+      } else {
+        maxLabels = 20 + Math.round(zoomReveal * 18);
       }
+    }
+      
+    labelsRef.current.querySelectorAll<HTMLSpanElement>('.three-label-item').forEach((el, i) => {
+      updateSingleLabel(el, i, vis, rect, time, labelBoxes, maxLabels, v);
     });
-  };
+  }, [updateThreeAuras]);
 
   /* ─────────── clear scene objects ─────────── */
   const clearScene = useCallback(() => {
@@ -812,7 +935,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
     if (renderer) {
       renderer.dispose();
       if (mount && mount.contains(renderer.domElement)) {
-        mount.removeChild(renderer.domElement);
+        renderer.domElement.remove();
       }
     }
     if (labelsRef.current) {
@@ -831,6 +954,54 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
   }, []);
 
   /* ─────────── build Three.js scene ─────────── */
+function addBackgroundStars(THREE: ThreeModule, scene: THREEns.Scene, nextMode: VisualiserMode) {
+  const starCount = nextMode === 'neural' ? 360 : 420;
+  const starPositions = new Float32Array(starCount * 3);
+  for (let i = 0; i < starCount; i++) {
+    const r = 600 + ((i * 37) % 480);
+    const a = i * 2.17;
+    const b = ((i * 53) % 180 - 90) * Math.PI / 180;
+    starPositions.set([
+      Math.cos(a) * Math.cos(b) * r,
+      Math.sin(b) * r,
+      Math.cos(b) * Math.sin(a) * r
+    ], i * 3);
+  }
+  const starGeom = new THREE.BufferGeometry();
+  starGeom.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+  scene.add(new THREE.Points(starGeom, new THREE.PointsMaterial({
+    color: 0xffffff,
+    map: makePointTexture(THREE, 'orb'),
+    alphaTest: 0.04,
+    size: 1.25,
+    transparent: true,
+    opacity: nextMode === 'neural' ? 0.38 : 0.24,
+    depthWrite: false
+  })));
+}
+
+function addPulsePoints(THREE: ThreeModule, vis: any, themeColors: any, nextMode: VisualiserMode, edges: any[]) {
+  const pulseEdges = nextMode === 'neural' ? edges.slice(0, 90) : [];
+  const pulseGeom = new THREE.BufferGeometry();
+  const pulsePositions = new Float32Array(pulseEdges.length * 3);
+  pulseGeom.setAttribute('position', new THREE.BufferAttribute(pulsePositions, 3));
+  const pulseOpacity = nextMode === 'neural' ? (themeColors.light ? 0.54 : 0.98) : 0.85;
+  const pulsePoints = new THREE.Points(pulseGeom, new THREE.PointsMaterial({
+    color: themeColors.pulse,
+    map: makePointTexture(THREE, 'star'),
+    alphaTest: 0.03,
+    size: nextMode === 'neural' ? 10.5 : 5.2,
+    transparent: true,
+    opacity: pulseOpacity,
+    depthWrite: false,
+    depthTest: false,
+    blending: themeColors.light ? THREE.NormalBlending : THREE.AdditiveBlending
+  }));
+  vis.group.add(pulsePoints);
+  vis.pulses = pulseEdges;
+  vis.pulsePoints = pulsePoints;
+}
+
   const buildThreeScene = useCallback((payload: any, nextMode: VisualiserMode) => {
     const vis = threeVisRef.current;
     const THREE = vis.THREE;
@@ -841,7 +1012,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
     const mount = mountRef.current;
     if (!mount) return;
 
-    const isLight = document.documentElement.getAttribute('data-theme') === 'light' || document.documentElement.dataset.theme === 'light';
+    const isLight = document.documentElement.dataset.theme === 'light';
     const themeColors = getThemeColors(nextMode, isLight);
 
     const renderer = new THREE.WebGLRenderer({
@@ -849,7 +1020,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
       alpha: true,
       powerPreference: 'high-performance',
     });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio || 1, 2));
     renderer.setSize(mount.clientWidth || 1000, mount.clientHeight || 680);
     renderer.setClearColor(themeColors.bg, 0);
     
@@ -881,7 +1052,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
     scene.add(pointLight);
 
     // Rings — always in scene, invisible until a node is picked
-    const ringGeo = new THREE.RingGeometry(1.0, 1.12, 48);
+    const ringGeo = new THREE.RingGeometry(1, 1.12, 48);
     const selRing = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
       color: 0xffe08a,
       side: THREE.DoubleSide,
@@ -919,18 +1090,30 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
 
     // Build curve line segments
     const linkGeom = buildThreeLinkSegments(THREE, edges, nextMode === 'neural');
+    
+    let linkOpacity;
+    if (nextMode === 'neural') {
+      linkOpacity = themeColors.light ? 0.3 : 0.4;
+    } else {
+      if (themeColors.light) {
+        linkOpacity = mobileThree ? 0.14 : 0.16;
+      } else {
+        linkOpacity = mobileThree ? 0.13 : 0.12;
+      }
+    }
+
     const linkMaterial = nextMode === 'neural'
       ? new THREE.LineBasicMaterial({
           color: themeColors.link,
           transparent: true,
-          opacity: themeColors.light ? 0.30 : 0.40,
+          opacity: linkOpacity,
           blending: themeColors.light ? THREE.NormalBlending : THREE.AdditiveBlending,
           depthWrite: false
         })
       : new THREE.LineDashedMaterial({
           color: themeColors.link,
           transparent: true,
-          opacity: themeColors.light ? (mobileThree ? 0.14 : 0.16) : (mobileThree ? 0.13 : 0.12),
+          opacity: linkOpacity,
           dashSize: 9,
           gapSize: 8,
           blending: THREE.NormalBlending,
@@ -952,49 +1135,10 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
     vis.group.add(addPoints(THREE, vis, vis.group, nodes, 'memory', themeColors.memory, nextMode === 'neural' ? 26 : 50));
 
     // Star points background
-    const starCount = nextMode === 'neural' ? 360 : 420;
-    const starPositions = new Float32Array(starCount * 3);
-    for (let i = 0; i < starCount; i++) {
-      const r = 600 + ((i * 37) % 480);
-      const a = i * 2.17;
-      const b = ((i * 53) % 180 - 90) * Math.PI / 180;
-      starPositions.set([
-        Math.cos(a) * Math.cos(b) * r,
-        Math.sin(b) * r,
-        Math.cos(b) * Math.sin(a) * r
-      ], i * 3);
-    }
-    const starGeom = new THREE.BufferGeometry();
-    starGeom.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-    scene.add(new THREE.Points(starGeom, new THREE.PointsMaterial({
-      color: 0xffffff,
-      map: makePointTexture(THREE, 'orb'),
-      alphaTest: 0.04,
-      size: 1.25,
-      transparent: true,
-      opacity: nextMode === 'neural' ? 0.38 : 0.24,
-      depthWrite: false
-    })));
+    addBackgroundStars(THREE, scene, nextMode);
 
     // Pulse points
-    const pulseEdges = nextMode === 'neural' ? edges.slice(0, 90) : [];
-    const pulseGeom = new THREE.BufferGeometry();
-    const pulsePositions = new Float32Array(pulseEdges.length * 3);
-    pulseGeom.setAttribute('position', new THREE.BufferAttribute(pulsePositions, 3));
-    const pulsePoints = new THREE.Points(pulseGeom, new THREE.PointsMaterial({
-      color: themeColors.pulse,
-      map: makePointTexture(THREE, 'star'),
-      alphaTest: 0.03,
-      size: nextMode === 'neural' ? 10.5 : 5.2,
-      transparent: true,
-      opacity: nextMode === 'neural' ? (themeColors.light ? 0.54 : 0.98) : 0.85,
-      depthWrite: false,
-      depthTest: false,
-      blending: themeColors.light ? THREE.NormalBlending : THREE.AdditiveBlending
-    }));
-    vis.group.add(pulsePoints);
-    vis.pulses = pulseEdges;
-    vis.pulsePoints = pulsePoints;
+    addPulsePoints(THREE, vis, themeColors, nextMode, edges);
 
     // HTML Labels overlay
     const labelNodes = nodes.filter((n: any) => !/^[a-f0-9]{10,}$/i.test(String(n.label || ''))).sort((a: any, b: any) => (b._degree + b._weight) - (a._degree + a._weight)).slice(0, nextMode === 'neural' ? 72 : 56);
@@ -1018,12 +1162,12 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
     vis.paused = false;
     setPaused(false);
     clampThreeCamera();
-  }, []);
+  }, [clampThreeCamera]);
 
   /* ─────────── rebuild when data/mode changes ─────────── */
   useEffect(() => {
     if (!threeReady || !data) return;
-    window.localStorage.setItem('mnemosyne-dashboard-visualiser-mode', mode);
+    globalThis.localStorage.setItem('mnemosyne-dashboard-visualiser-mode', mode);
     buildThreeScene(data, mode);
     resetView(mode);
     setSelectedNode(null);
@@ -1040,7 +1184,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { fetchConstellation(); }, []);
+  useEffect(() => { fetchConstellation(); }, [fetchConstellation]);
 
   /* ─────────── lazy-load Three.js + init renderer ─────────── */
   useEffect(() => {
@@ -1063,6 +1207,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
       cancelled = true;
       clearScene();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ─────────── resize observer ─────────── */
@@ -1188,7 +1333,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
 
     animate(0);
     return () => cancelAnimationFrame(animFrame);
-  }, [threeReady, loading, sceneError, data, mode]);
+  }, [threeReady, loading, sceneError, data, mode, clampThreeCamera, updateThreeLabels]);
 
   /* ─────────── pointer / wheel interaction ─────────── */
   useEffect(() => {
@@ -1218,7 +1363,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
 
     const handlePointerDown = (e: PointerEvent) => {
       if (e.cancelable) e.preventDefault();
-      try { viewport.setPointerCapture?.(e.pointerId); } catch (_err) {}
+      try { viewport.setPointerCapture?.(e.pointerId); } catch (err) { console.warn('setPointerCapture failed', err); }
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       
       if (pointers.size >= 2) {
@@ -1376,7 +1521,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
       viewport.removeEventListener('pointerleave', handlePointerUp);
       viewport.removeEventListener('click', handleClick);
     };
-  }, [threeReady, loading, sceneError, data, mode]);
+  }, [threeReady, loading, sceneError, data, mode, clampThreeCamera]);
 
   /* ─────────── UI handlers ─────────── */
   const togglePause = () => {
@@ -1402,7 +1547,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
   };
 
   const counts = { nodes: data?.nodes?.length || 0, edges: data?.edges?.length || 0 };
-  const isLight = typeof document !== 'undefined' ? (document.documentElement.getAttribute('data-theme') === 'light' || document.documentElement.dataset.theme === 'light') : false;
+  const isLight = typeof document === 'undefined' ? false : (document.documentElement.dataset.theme === 'light');
   const themeColors = getThemeColors(mode, isLight);
 
   // Compute connected edges for the selected node
@@ -1429,7 +1574,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
       if (ce.item.confidence !== undefined) return safeNumber(ce.item.confidence, 2);
       if (ce.item.importance !== undefined) return safeNumber(ce.item.importance, 2);
     }
-    if (ce.neighbor && ce.neighbor.weight !== undefined) return safeNumber(ce.neighbor.weight, 2);
+    if (ce.neighbor?.weight !== undefined) return safeNumber(ce.neighbor.weight, 2);
     return '0.80';
   };
 
@@ -1439,6 +1584,47 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
       setSelectedNode(matchedNode);
     }
   };
+
+  const renderCanvasFallback = () => {
+    if (threeError) {
+      return (
+        <div style={{ height: '680px', display: 'grid', placeItems: 'center', color: '#f87171', padding: '24px', textAlign: 'center' }}>
+          {threeError}
+        </div>
+      );
+    }
+    if (loading) {
+      return (
+        <div style={{ height: '680px', display: 'grid', placeItems: 'center', color: MG(0.4), fontSize: '12px' }}>
+          {t('visualiser.loadingEngine')}
+        </div>
+      );
+    }
+    if (sceneError) {
+      return (
+        <div style={{ height: '680px', display: 'grid', placeItems: 'center', color: '#f87171', padding: '24px', textAlign: 'center' }}>
+          {sceneError}
+        </div>
+      );
+    }
+    if (counts.nodes === 0) {
+      return (
+        <div style={{ height: '680px', display: 'grid', placeItems: 'center', color: MG(0.4), fontSize: '12px' }}>
+          {t('visualiser.noNodes')}
+        </div>
+      );
+    }
+    return null;
+  };
+
+  let pauseBtnLabel = '';
+  if (paused) {
+    pauseBtnLabel = t('visualiser.resume');
+  } else if (mode === 'neural') {
+    pauseBtnLabel = t('visualiser.pauseDrift');
+  } else {
+    pauseBtnLabel = t('visualiser.pauseRotation');
+  }
 
   /* ─────────── render ─────────── */
   return (
@@ -1650,7 +1836,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
             {cameraMode === 'pan' ? t('visualiser.rotateMode') : t('visualiser.panMode')}
           </Button>
           <Button ghost onClick={togglePause}>
-            {paused ? t('visualiser.resume') : mode === 'neural' ? t('visualiser.pauseDrift') : t('visualiser.pauseRotation')}
+            {pauseBtnLabel}
           </Button>
           <Button ghost onClick={toggleFullscreen}>{t('visualiser.fullscreen')}</Button>
         </div>
@@ -1671,23 +1857,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
           }}
         >
           {/* Error states */}
-          {threeError ? (
-            <div style={{ height: '680px', display: 'grid', placeItems: 'center', color: '#f87171', padding: '24px', textAlign: 'center' }}>
-              {threeError}
-            </div>
-          ) : loading ? (
-            <div style={{ height: '680px', display: 'grid', placeItems: 'center', color: MG(0.4), fontSize: '12px' }}>
-              {t('visualiser.loadingEngine')}
-            </div>
-          ) : sceneError ? (
-            <div style={{ height: '680px', display: 'grid', placeItems: 'center', color: '#f87171', padding: '24px', textAlign: 'center' }}>
-              {sceneError}
-            </div>
-          ) : counts.nodes === 0 ? (
-            <div style={{ height: '680px', display: 'grid', placeItems: 'center', color: MG(0.4), fontSize: '12px' }}>
-              {t('visualiser.noNodes')}
-            </div>
-          ) : null}
+          {renderCanvasFallback()}
 
           {/* Three.js mount point */}
           <div
@@ -1814,11 +1984,13 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
                   {connectedEdges.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '280px', overflowY: 'auto' }}>
                       {connectedEdges.map((ce: any) => (
-                        <div
+                        <button
                           key={ce.edgeId}
+                          type="button"
                           onClick={() => handleSelectNeighbor(ce.neighbor)}
                           style={{
                             display: 'flex',
+                            width: '100%',
                             justifyContent: 'space-between',
                             alignItems: 'center',
                             padding: '8px 10px',
@@ -1827,6 +1999,9 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
                             border: `1px solid ${MG(0.06)}`,
                             cursor: 'pointer',
                             fontSize: '11px',
+                            font: 'inherit',
+                            color: 'inherit',
+                            textAlign: 'left',
                             transition: 'background 0.15s, border-color 0.15s'
                           }}
                           onMouseEnter={(e: any) => {
@@ -1849,7 +2024,7 @@ export const VisualiserTab: React.FC<VisualiserTabProps> = ({ onInspectMemory })
                           <Badge style={{ background: MG(0.08), color: MG(0.6) }}>
                             {getRelationshipStrength(ce)}
                           </Badge>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   ) : (
