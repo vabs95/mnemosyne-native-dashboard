@@ -16,33 +16,7 @@ import { Button } from '@hermes/sdk';
 import { formatDateTimeLabel, safeNumber } from './utils/format';
 import { t } from './utils/i18n';
 
-interface MemoryItem {
-  id: string;
-  content: string;
-  importance: number;
-  veracity: string;
-  source: string;
-  scope: string;
-  status: string;
-  created_at: string;
-  session_id?: string;
-  valid_until?: string;
-  metadata?: any;
-  trust_weight?: number;
-  degradation_label?: string | null;
-  degradation_tier?: number | null;
-  degradation_weight?: number | null;
-  effective_memory_weight?: number;
-  contaminated?: boolean;
-  memory_kind?: string;
-  tier?: string;
-  recall_count?: number;
-  last_recalled?: string;
-  degraded_at?: string;
-  superseded_by?: string;
-}
-
-const API = '/api/plugins/mnemosyne-native-dashboard';
+import { MemoryItem, API_BASE as API } from './types';
 
 const TABS = [
   { id: 'overview' },

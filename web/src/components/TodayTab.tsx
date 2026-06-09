@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, Button, Input } from '@hermes/sdk';
+import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, Button, Input, Tabs, TabsList, TabsTrigger } from '@hermes/sdk';
 import { formatDateTimeLabel, safeNumber, shortId } from '../utils/format';
 import { t } from '../utils/i18n';
+import { MemoryItem, TripleItem, ConsolidationItem, API_BASE as API } from '../types';
 
-const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
 const VERACITY_COLOR: Record<string, string> = {
   stated: '#065f46',
@@ -11,37 +11,6 @@ const VERACITY_COLOR: Record<string, string> = {
   tool: '#581c87',
   imported: '#78350f',
 };
-
-interface MemoryItem {
-  id: string;
-  content: string;
-  importance: number;
-  veracity: string;
-  source: string;
-  scope: string;
-  status: string;
-  created_at: string;
-  session_id?: string;
-  valid_until?: string;
-}
-
-interface TripleItem {
-  id: string;
-  subject: string;
-  predicate: string;
-  object: string;
-  confidence?: number;
-  created_at?: string;
-  valid_from?: string;
-}
-
-interface ConsolidationItem {
-  id: string;
-  session_id: string;
-  items_consolidated: number;
-  summary_preview: string;
-  created_at: string;
-}
 
 interface DigestData {
   day: string;
@@ -162,13 +131,20 @@ export const TodayTab: React.FC<{
             </Card>
           )}
 
-          {/* Subpanels tabs navigation */}
-          <div style={{ display: 'flex', gap: '4px', borderBottom: `1px solid ${MG(0.1)}`, paddingBottom: '8px', marginTop: '8px' }}>
-            <Button onClick={() => setActiveSubPanel('added')} ghost={activeSubPanel !== 'added'} primary={activeSubPanel === 'added'} style={{ fontSize: '12px', padding: '6px 12px', height: '30px' }}>{t('today.added')}</Button>
-            <Button onClick={() => setActiveSubPanel('recalled')} ghost={activeSubPanel !== 'recalled'} primary={activeSubPanel === 'recalled'} style={{ fontSize: '12px', padding: '6px 12px', height: '30px' }}>{t('today.recalled')}</Button>
-            <Button onClick={() => setActiveSubPanel('triples')} ghost={activeSubPanel !== 'triples'} primary={activeSubPanel === 'triples'} style={{ fontSize: '12px', padding: '6px 12px', height: '30px' }}>{t('today.triples')}</Button>
-            <Button onClick={() => setActiveSubPanel('consolidations')} ghost={activeSubPanel !== 'consolidations'} primary={activeSubPanel === 'consolidations'} style={{ fontSize: '12px', padding: '6px 12px', height: '30px' }}>{t('today.consolidations')}</Button>
-          </div>
+          {/* Subpanels tabs navigation using SDK Tabs */}
+          <Tabs defaultValue="added" className="">
+            {(activeValue: string, setActiveValue: (v: string) => void) => {
+              const currentPanel = activeValue || 'added';
+              return (
+                <TabsList style={{ marginBottom: '8px', flexWrap: 'wrap', height: 'auto', gap: '2px' }}>
+                  <TabsTrigger value="added" active={currentPanel === 'added'} onClick={() => { setActiveValue('added'); setActiveSubPanel('added'); }}>{t('today.added')}</TabsTrigger>
+                  <TabsTrigger value="recalled" active={currentPanel === 'recalled'} onClick={() => { setActiveValue('recalled'); setActiveSubPanel('recalled'); }}>{t('today.recalled')}</TabsTrigger>
+                  <TabsTrigger value="triples" active={currentPanel === 'triples'} onClick={() => { setActiveValue('triples'); setActiveSubPanel('triples'); }}>{t('today.triples')}</TabsTrigger>
+                  <TabsTrigger value="consolidations" active={currentPanel === 'consolidations'} onClick={() => { setActiveValue('consolidations'); setActiveSubPanel('consolidations'); }}>{t('today.consolidations')}</TabsTrigger>
+                </TabsList>
+              );
+            }}
+          </Tabs>
 
           {/* Subpanel lists */}
           <div>
@@ -184,7 +160,10 @@ export const TodayTab: React.FC<{
                         padding: '10px 12px', borderRadius: '4px', cursor: 'pointer',
                         background: MG(0.03), border: `1px solid ${MG(0.07)}`,
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px',
+                        transition: 'background 0.15s',
                       }}
+                      onMouseEnter={e => (e.currentTarget.style.background = MG(0.07))}
+                      onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
                     >
                       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
                         <span style={{ fontSize: '13px' }}>{m.content}</span>
@@ -221,7 +200,10 @@ export const TodayTab: React.FC<{
                         padding: '10px 12px', borderRadius: '4px', cursor: 'pointer',
                         background: MG(0.03), border: `1px solid ${MG(0.07)}`,
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px',
+                        transition: 'background 0.15s',
                       }}
+                      onMouseEnter={e => (e.currentTarget.style.background = MG(0.07))}
+                      onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
                     >
                       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
                         <span style={{ fontSize: '13px' }}>{m.content}</span>
@@ -235,7 +217,7 @@ export const TodayTab: React.FC<{
                               session:{shortId(m.session_id)}
                             </span>
                           )}
-                          <span style={{ fontSize: '10px', color: MG(0.4) }}>importance:{safeNumber(m.importance, 2)}</span>
+                          <span style={{ fontSize: '10px', color: MG(0.4) }}>imp:{safeNumber(m.importance, 2)}</span>
                         </div>
                       </div>
                     </div>
@@ -258,7 +240,10 @@ export const TodayTab: React.FC<{
                         padding: '10px 12px', borderRadius: '4px', cursor: 'pointer',
                         background: MG(0.03), border: `1px solid ${MG(0.07)}`,
                         fontSize: '12px',
+                        transition: 'background 0.15s',
                       }}
+                      onMouseEnter={e => (e.currentTarget.style.background = MG(0.07))}
+                      onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', color: MG(0.45), marginBottom: '4px' }}>
                         <span>{t('today.triples').toLowerCase()}</span>
@@ -287,7 +272,10 @@ export const TodayTab: React.FC<{
                         padding: '10px 12px', borderRadius: '4px', cursor: 'pointer',
                         background: MG(0.03), border: `1px solid ${MG(0.07)}`,
                         fontSize: '12px',
+                        transition: 'background 0.15s',
                       }}
+                      onMouseEnter={e => (e.currentTarget.style.background = MG(0.07))}
+                      onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', color: MG(0.45), marginBottom: '4px' }}>
                         <span>{t('today.consolidations').toLowerCase()} · {cItem.items_consolidated} {t('contextBank.items')}</span>

@@ -1,26 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { fetchJSON, Card, CardContent, Button, Input, Badge } from '@hermes/sdk';
+import { fetchJSON, Card, CardContent, Button, Input, Badge, Tabs, TabsList, TabsTrigger } from '@hermes/sdk';
 import { t } from '../utils/i18n';
-
-interface Node {
-  id: string;
-  label: string;
-  count?: number;
-  x?: number;
-  y?: number;
-}
-
-interface Edge {
-  id: string;
-  source: string;
-  target: string;
-  predicate: string;
-  subject: string;
-  object: string;
-  confidence?: number;
-  created_at?: string;
-  valid_from?: string;
-}
+import { safeNumber } from '../utils/format';
+import { Node, Edge, API_BASE } from '../types';
 
 interface GraphData {
   nodes: Node[];
@@ -77,7 +59,7 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
     setSelectedEdge(null);
     try {
       const q = encodeURIComponent(queryStr.trim());
-      const data = await fetchJSON(`/api/plugins/mnemosyne-native-dashboard/graph?q=${q}&limit=300`);
+      const data = await fetchJSON(`${API_BASE}/graph?q=${q}&limit=300`);
       
       // Calculate layout coordinates using a force-directed (Fruchterman-Reingold) simulation
       const w = 1000;
@@ -189,7 +171,7 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
     setLoadingTriples(true);
     try {
       const q = encodeURIComponent(queryStr.trim());
-      const res = await fetchJSON(`/api/plugins/mnemosyne-native-dashboard/triples?q=${q}&limit=200`);
+      const res = await fetchJSON(`${API_BASE}/triples?q=${q}&limit=200`);
       setTriples(res.items || []);
     } catch (err) {
       console.error('Failed to load triples data', err);
@@ -383,23 +365,18 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
         }
       `}</style>
 
-      {/* Sub-tabs */}
-      <div style={{ display: 'flex', gap: '4px', borderBottom: '1px solid rgba(234,234,234,0.1)', paddingBottom: '0', marginBottom: '16px' }}>
-        {(['graph', 'triples'] as const).map(p => (
-          <button
-            key={p}
-            onClick={() => setActivePanel(p)}
-            style={{
-              padding: '6px 16px', fontSize: '12px', fontWeight: 500, background: 'none', border: 'none',
-              borderBottom: activePanel === p ? '2px solid rgba(234,234,234,0.8)' : '2px solid transparent',
-              cursor: 'pointer', color: activePanel === p ? 'rgba(234,234,234,0.9)' : 'rgba(234,234,234,0.4)',
-              transition: 'color 0.15s, border-color 0.15s',
-            }}
-          >
-            {p === 'graph' ? t('graph.relationshipGraph') : t('graph.factsTable')}
-          </button>
-        ))}
-      </div>
+      {/* Sub-tabs using SDK Tabs */}
+      <Tabs defaultValue="graph" className="">
+        {(activeValue: string, setActiveValue: (v: string) => void) => {
+          const currentPanel = activeValue || 'graph';
+          return (
+            <TabsList style={{ marginBottom: '16px', flexWrap: 'wrap', height: 'auto', gap: '2px' }}>
+              <TabsTrigger value="graph" active={currentPanel === 'graph'} onClick={() => { setActiveValue('graph'); setActivePanel('graph'); }}>{t('graph.relationshipGraph')}</TabsTrigger>
+              <TabsTrigger value="triples" active={currentPanel === 'triples'} onClick={() => { setActiveValue('triples'); setActivePanel('triples'); }}>{t('graph.factsTable')}</TabsTrigger>
+            </TabsList>
+          );
+        }}
+      </Tabs>
 
       {activePanel === 'graph' && (
         <div className="space-y-4">
@@ -599,7 +576,7 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
                         </div>
 
                         <div style={{ fontSize: '11px', color: 'rgba(234,234,234,0.45)', marginTop: '8px' }}>
-                          {t('graph.confidence')} {selectedEdge.confidence != null ? selectedEdge.confidence.toFixed(2) : 'n/a'}
+                          {t('graph.confidence')} {safeNumber(selectedEdge.confidence, 2)}
                         </div>
                         {selectedEdge.created_at && (
                           <div style={{ fontSize: '11px', color: 'rgba(234,234,234,0.4)', fontFamily: 'var(--theme-font-mono)', marginTop: '4px' }}>
@@ -667,7 +644,7 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
                         <td style={{ padding: '10px 12px', fontFamily: 'var(--theme-font-mono)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t_item.subject}>{t_item.subject}</td>
                         <td style={{ padding: '10px 12px', fontFamily: 'var(--theme-font-mono)', color: '#f59e0b', fontWeight: 600, maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t_item.predicate}>{t_item.predicate}</td>
                         <td style={{ padding: '10px 12px', fontFamily: 'var(--theme-font-mono)', maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t_item.object}>{t_item.object}</td>
-                        <td style={{ padding: '10px 12px', fontFamily: 'var(--theme-font-mono)', textAlign: 'center' }}>{t_item.confidence != null ? t_item.confidence.toFixed(2) : 'n/a'}</td>
+                        <td style={{ padding: '10px 12px', fontFamily: 'var(--theme-font-mono)', textAlign: 'center' }}>{safeNumber(t_item.confidence, 2)}</td>
                         <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                           <Button ghost onClick={() => setInspectingJson(t_item)}>{t('common.details')}</Button>
                         </td>

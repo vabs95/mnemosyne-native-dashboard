@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, Button, Input, Select, SelectOption } from '@hermes/sdk';
+import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, Button, Input, Select, SelectOption, Checkbox } from '@hermes/sdk';
 import { formatDateTimeLabel, safeNumber, shortId } from '../utils/format';
 import { t } from '../utils/i18n';
+import { MemoryItem, API_BASE as API } from '../types';
 
-const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
 const VERACITY_COLOR: Record<string, string> = {
   stated: '#065f46',
@@ -11,23 +11,6 @@ const VERACITY_COLOR: Record<string, string> = {
   tool: '#581c87',
   imported: '#78350f',
 };
-
-interface MemoryItem {
-  id: string;
-  content: string;
-  importance: number;
-  veracity: string;
-  source: string;
-  scope: string;
-  status: string;
-  created_at: string;
-  session_id?: string;
-  valid_until?: string;
-  degradation_tier?: number;
-  degradation_label?: string;
-  contaminated?: boolean;
-  memory_kind?: string;
-}
 
 interface ReviewCard {
   key: string;
@@ -260,7 +243,7 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: MG(0.4), textTransform: 'uppercase' }}>
                 <span>{t('review.minImportance')}</span>
                 <span style={{ fontFamily: 'var(--theme-font-mono)' }}>
-                  {Number(minImportance) > 0 ? `≥ ${Number(minImportance).toFixed(2)}` : 'any'}
+                  {Number(minImportance) > 0 ? `≥ ${safeNumber(minImportance, 2)}` : 'any'}
                 </span>
               </div>
               <input
@@ -288,10 +271,10 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
           <CardContent style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
+                <Checkbox
+                  id="selectAllCheckbox"
                   checked={items.length > 0 && items.every(x => selectedIds.has(x.id))}
-                  onChange={handleSelectAllToggle}
+                  onCheckedChange={handleSelectAllToggle}
                 />
                 <span>{t('review.selectListed')}</span>
               </label>
@@ -373,13 +356,15 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
                   display: 'flex',
                   alignItems: 'flex-start',
                   gap: '12px',
+                  transition: 'background 0.15s',
                 }}
+                onMouseEnter={e => (e.currentTarget.style.background = MG(0.07))}
+                onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
               >
                 {adminMode && (
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={selectedIds.has(m.id)}
-                    onChange={() => handleSelectToggle(m.id)}
+                    onCheckedChange={() => handleSelectToggle(m.id)}
                     style={{ marginTop: '4px', cursor: 'pointer' }}
                   />
                 )}
@@ -390,7 +375,7 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
                     <Badge>{m.status || 'active'}</Badge>
                     <Badge style={{ background: VERACITY_COLOR[String(m.veracity).toLowerCase()] || MG(0.1) }}>{m.veracity}</Badge>
                     {m.degradation_label && <Badge>{m.degradation_label}</Badge>}
-                    <span style={{ fontSize: '11px', color: MG(0.4) }}>importance:{safeNumber(m.importance, 2)}</span>
+                    <span style={{ fontSize: '11px', color: MG(0.4) }}>imp:{safeNumber(m.importance, 2)}</span>
                     {m.session_id && (
                       <span
                         onClick={() => onInspectSession(m.session_id!)}
@@ -427,7 +412,7 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
             )}
           </div>
         ) : (
-          <div style={{ padding: '40px', border: `1px dashed ${MG(0.15)}`, borderRadius: '4px', textAlign: 'center', color: MG(0.4), fontSize: '13px' }}>
+          <div style={{ padding: '20px', border: `1px dashed ${MG(0.15)}`, borderRadius: '4px', textAlign: 'center', color: MG(0.35), fontSize: '12px' }}>
             {t('review.noItems')}
           </div>
         )}

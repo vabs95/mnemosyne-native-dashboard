@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardContent, Button, Badge } from '@hermes/sdk';
 import { formatDateTimeLabel, safeNumber, shortId } from '../utils/format';
 import { t } from '../utils/i18n';
+import { MemoryItem, API_BASE as API } from '../types';
 
-const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
 const VERACITY_COLOR: Record<string, string> = {
   stated: '#065f46',
@@ -11,21 +11,6 @@ const VERACITY_COLOR: Record<string, string> = {
   tool: '#581c87',
   imported: '#78350f',
 };
-
-interface MemoryItem {
-  id: string;
-  content: string;
-  importance: number;
-  veracity: string;
-  source: string;
-  scope: string;
-  status: string;
-  created_at: string;
-  session_id?: string;
-  valid_until?: string;
-  degradation_tier?: number;
-  degradation_label?: string;
-}
 
 interface LifecycleCard {
   key: string;
@@ -143,17 +128,20 @@ export const LifecycleTab: React.FC<{
                     style={{
                       padding: '10px 12px',
                       borderRadius: '4px',
-                      background: MG(0.02),
-                      border: `1px solid ${MG(0.06)}`,
+                      background: MG(0.03),
+                      border: `1px solid ${MG(0.07)}`,
                       display: 'flex',
                       flexDirection: 'column',
                       gap: '4px',
+                      transition: 'background 0.15s',
                     }}
+                    onMouseEnter={e => (e.currentTarget.style.background = MG(0.07))}
+                    onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
                   >
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center', fontSize: '11px' }}>
                       <Badge style={{ background: VERACITY_COLOR[String(m.veracity).toLowerCase()] || MG(0.1) }}>{m.veracity}</Badge>
                       {m.degradation_label && <Badge>{m.degradation_label}</Badge>}
-                      <span style={{ color: MG(0.4) }}>importance:{safeNumber(m.importance, 2)}</span>
+                      <span style={{ color: MG(0.4) }}>imp:{safeNumber(m.importance, 2)}</span>
                       {m.session_id && (
                         <span
                           onClick={() => onInspectSession(m.session_id!)}
@@ -174,7 +162,7 @@ export const LifecycleTab: React.FC<{
                 ))}
               </div>
             ) : (
-              <div style={{ padding: '16px', textAlign: 'center', color: MG(0.35), fontSize: '12px' }}>
+              <div style={{ padding: '20px', textAlign: 'center', color: MG(0.35), fontSize: '12px' }}>
                 {t('lifecycle.noItems')}
               </div>
             )}

@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge } from '@hermes/sdk';
 import { safeNumber } from '../utils/format';
 import { t } from '../utils/i18n';
+import { API_BASE as API } from '../types';
 
-const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
 
 interface ProfileSection {
@@ -88,7 +88,7 @@ export const ContextBankTab: React.FC = () => {
             </Card>
           ))
         ) : (
-          <div style={{ gridColumn: 'span 2', padding: '40px', textAlign: 'center', color: MG(0.35), border: `1px dashed ${MG(0.15)}`, borderRadius: '4px', fontSize: '13px' }}>
+          <div style={{ gridColumn: 'span 2', padding: '20px', textAlign: 'center', color: MG(0.35), border: `1px dashed ${MG(0.15)}`, borderRadius: '4px', fontSize: '12px' }}>
             {t('contextBank.noRecords')}
           </div>
         )}

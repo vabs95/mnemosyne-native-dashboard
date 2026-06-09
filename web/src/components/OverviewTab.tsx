@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, timeAgo, Button } from '@hermes/sdk';
 import { formatRelativeTime, safeNumber, shortId } from '../utils/format';
 import { t } from '../utils/i18n';
+import { MemoryItem, API_BASE as API } from '../types';
 
-const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
 
 interface OverviewStats {
@@ -16,16 +16,6 @@ interface OverviewStats {
   contamination?: { total: number; high_importance: number };
   degradation?: { degraded: number };
   db_path?: string;
-}
-
-interface MemoryItem {
-  id: string;
-  content: string;
-  importance: number;
-  veracity: string;
-  source: string;
-  created_at: string;
-  session_id?: string;
 }
 
 interface OverviewTabProps {

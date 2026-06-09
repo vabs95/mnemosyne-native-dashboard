@@ -2,22 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, Button, Input, Select, SelectOption } from '@hermes/sdk';
 import { formatDateLabel, safeNumber, shortId } from '../utils/format';
 import { t } from '../utils/i18n';
+import { MemoryItem, API_BASE as API } from '../types';
 
-const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
-
-interface MemoryItem {
-  id: string;
-  content: string;
-  importance: number;
-  veracity: string;
-  source: string;
-  scope: string;
-  status: string;
-  created_at: string;
-  session_id?: string;
-  valid_until?: string;
-}
 
 interface StatsData {
   by_source?: Array<{ source: string; count: number }>;
@@ -274,7 +261,7 @@ export const MemoriesTab: React.FC<MemoriesTabProps> = ({ onInspectMemory, onIns
               </div>
             ))
           ) : (
-            <div style={{ textAlign: 'center', padding: '40px', color: MG(0.35), fontSize: '13px' }}>{t('memories.noMatching')}</div>
+            <div style={{ textAlign: 'center', padding: '20px', color: MG(0.35), fontSize: '12px' }}>{t('memories.noMatching')}</div>
           )}
         </div>
       </div>

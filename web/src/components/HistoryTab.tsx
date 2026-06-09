@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Button, Badge } from '@hermes/sdk';
+import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Button, Badge, Tabs, TabsList, TabsTrigger } from '@hermes/sdk';
 import { formatDateTimeLabel, safeNumber, shortId } from '../utils/format';
 import { t } from '../utils/i18n';
+import { ConsolidationItem, API_BASE as API } from '../types';
 
-const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
 const VERACITY_COLOR: Record<string, string> = {
   stated: '#065f46',
@@ -24,13 +24,6 @@ interface TimelineGroup {
     preview?: string;
     item?: { id?: string; content?: string; veracity?: string; created_at?: string; importance?: number; source?: string };
   }>;
-}
-
-interface ConsolidationItem {
-  id: string;
-  session_id: string;
-  summary: string;
-  created_at: string;
 }
 
 interface SessionDetail {
@@ -85,10 +78,17 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ onInspectMemory }) => {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '12px', borderBottom: `1px solid ${MG(0.1)}` }}>
           <div style={{ fontSize: '14px', fontWeight: 600 }}>{t('history.title')}</div>
-          <div style={{ display: 'flex', gap: '4px' }}>
-            <Button onClick={() => setGrouping('day')} outlined={grouping !== 'day'}>{t('history.byDay')}</Button>
-            <Button onClick={() => setGrouping('session')} outlined={grouping !== 'session'}>{t('history.bySession')}</Button>
-          </div>
+          <Tabs defaultValue="day" className="">
+            {(activeValue: string, setActiveValue: (v: string) => void) => {
+              const currentGrouping = activeValue || 'day';
+              return (
+                <TabsList style={{ height: 'auto', gap: '2px' }}>
+                  <TabsTrigger value="day" active={currentGrouping === 'day'} onClick={() => { setActiveValue('day'); setGrouping('day'); }}>{t('history.byDay')}</TabsTrigger>
+                  <TabsTrigger value="session" active={currentGrouping === 'session'} onClick={() => { setActiveValue('session'); setGrouping('session'); }}>{t('history.bySession')}</TabsTrigger>
+                </TabsList>
+              );
+            }}
+          </Tabs>
         </div>
 
         {loading ? (
@@ -138,7 +138,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ onInspectMemory }) => {
             ))}
           </div>
         ) : (
-          <div style={{ padding: '32px', border: `1px dashed ${MG(0.15)}`, borderRadius: '4px', textAlign: 'center', color: MG(0.35), fontSize: '13px' }}>
+          <div style={{ padding: '20px', border: `1px dashed ${MG(0.15)}`, borderRadius: '4px', textAlign: 'center', color: MG(0.35), fontSize: '12px' }}>
             {t('history.noEvents')}
           </div>
         )}

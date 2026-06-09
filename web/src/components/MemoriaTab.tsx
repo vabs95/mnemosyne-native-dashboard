@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, Button, Input } from '@hermes/sdk';
+import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, Button, Input, Tabs, TabsList, TabsTrigger } from '@hermes/sdk';
 import { safeNumber, shortId } from '../utils/format';
 import { t } from '../utils/i18n';
+import { API_BASE as API } from '../types';
 
-const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
 
 const NAME_MAP: Record<string, string> = {
@@ -97,10 +97,21 @@ export const MemoriaTab: React.FC<{
     const value = item.value || '';
     const ctx = item.context_snippet || '';
     return (
-      <div key={item.id || key} style={{ padding: '10px 12px', background: MG(0.03), border: `1px solid ${MG(0.07)}`, borderRadius: '4px' }}>
+      <div
+        key={item.id || key}
+        style={{
+          padding: '10px 12px',
+          background: MG(0.03),
+          border: `1px solid ${MG(0.07)}`,
+          borderRadius: '4px',
+          transition: 'background 0.15s',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.background = MG(0.07))}
+        onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
+      >
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>
           {item.fact_type && <Badge>{item.fact_type}</Badge>}
-          {item.importance && <Badge>imp {Number(item.importance).toFixed(2)}</Badge>}
+          {item.importance && <Badge>imp:{safeNumber(item.importance, 2)}</Badge>}
           {item.session_id && item.session_id !== 'default' && (
             <span
               onClick={() => onInspectSession(item.session_id)}
@@ -120,7 +131,18 @@ export const MemoriaTab: React.FC<{
     const desc = item.description || '';
     const date = item.date || '';
     return (
-      <div key={item.id || idx} style={{ padding: '10px 12px', background: MG(0.03), border: `1px solid ${MG(0.07)}`, borderRadius: '4px' }}>
+      <div
+        key={item.id || idx}
+        style={{
+          padding: '10px 12px',
+          background: MG(0.03),
+          border: `1px solid ${MG(0.07)}`,
+          borderRadius: '4px',
+          transition: 'background 0.15s',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.background = MG(0.07))}
+        onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
+      >
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>
           {date && <Badge>{date}</Badge>}
           {item.source && <Badge>{item.source}</Badge>}
@@ -144,7 +166,18 @@ export const MemoriaTab: React.FC<{
     const ctx = item.context_snippet || '';
     const isActive = item.active == 1;
     return (
-      <div key={item.id || instr} style={{ padding: '10px 12px', background: MG(0.03), border: `1px solid ${MG(0.07)}`, borderRadius: '4px' }}>
+      <div
+        key={item.id || instr}
+        style={{
+          padding: '10px 12px',
+          background: MG(0.03),
+          border: `1px solid ${MG(0.07)}`,
+          borderRadius: '4px',
+          transition: 'background 0.15s',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.background = MG(0.07))}
+        onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
+      >
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>
           {topic && <Badge>{topic}</Badge>}
           <Badge style={{ background: isActive ? '#065f46' : '#991b1b' }}>{isActive ? t('common.active') : t('common.inactive')}</Badge>
@@ -171,7 +204,18 @@ export const MemoriaTab: React.FC<{
       .map(([k, v]) => `${k}: ${String(v).slice(0, 40)}`);
 
     return (
-      <div key={item.id || idx} style={{ padding: '10px 12px', background: MG(0.03), border: `1px solid ${MG(0.07)}`, borderRadius: '4px' }}>
+      <div
+        key={item.id || idx}
+        style={{
+          padding: '10px 12px',
+          background: MG(0.03),
+          border: `1px solid ${MG(0.07)}`,
+          borderRadius: '4px',
+          transition: 'background 0.15s',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.background = MG(0.07))}
+        onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
+      >
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>
           {badges.map(b => <Badge key={b}>{b}</Badge>)}
         </div>
@@ -223,20 +267,26 @@ export const MemoriaTab: React.FC<{
         <div style={{ fontSize: '12px', color: MG(0.45) }}>{t('memoria.subtitle')}</div>
       </div>
 
-      {/* Subpanels tabs navigation */}
-      <div style={{ display: 'flex', gap: '4px', borderBottom: `1px solid ${MG(0.1)}`, paddingBottom: '8px' }}>
-        {panels.map(panel => (
-          <Button
-            key={panel}
-            onClick={() => setActivePanel(panel)}
-            ghost={activePanel !== panel}
-            primary={activePanel === panel}
-            style={{ fontSize: '12px', textTransform: 'capitalize', padding: '6px 12px', height: '30px' }}
-          >
-            {panelTitleKey[panel] || panel}
-          </Button>
-        ))}
-      </div>
+      {/* Subpanels tabs navigation using SDK Tabs */}
+      <Tabs defaultValue="overview" className="">
+        {(activeValue: string, setActiveValue: (v: string) => void) => {
+          const currentPanel = activeValue || 'overview';
+          return (
+            <TabsList style={{ marginBottom: '8px', flexWrap: 'wrap', height: 'auto', gap: '2px' }}>
+              {panels.map(panel => (
+                <TabsTrigger
+                  key={panel}
+                  value={panel}
+                  active={currentPanel === panel}
+                  onClick={() => { setActiveValue(panel); setActivePanel(panel); }}
+                >
+                  {panelTitleKey[panel] || panel}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          );
+        }}
+      </Tabs>
 
       {/* Overview stats cards */}
       {loadingStats ? (
@@ -344,11 +394,11 @@ export const MemoriaTab: React.FC<{
                       </thead>
                       <tbody>
                         {listData.kg.map((item, idx) => (
-                          <tr key={idx} style={{ borderBottom: `1px solid ${MG(0.06)}` }}>
+                          <tr key={idx} style={{ borderBottom: `1px solid ${MG(0.06)}`, transition: 'background 0.15s' }} onMouseEnter={e => (e.currentTarget.style.background = MG(0.03))} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                             <td style={{ padding: '8px 12px' }}>{item.subject}</td>
                             <td style={{ padding: '8px 12px' }}>{item.predicate}</td>
                             <td style={{ padding: '8px 12px' }}>{item.object}</td>
-                            <td style={{ padding: '8px 12px' }}>{item.confidence !== null && item.confidence !== undefined ? Number(item.confidence).toFixed(2) : '—'}</td>
+                            <td style={{ padding: '8px 12px' }}>{safeNumber(item.confidence, 2, '—')}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -357,7 +407,7 @@ export const MemoriaTab: React.FC<{
                 )}
               </div>
             ) : (
-              <div style={{ textAlign: 'center', padding: '40px', color: MG(0.35) }}>{t('memoria.noData')}</div>
+              <div style={{ textAlign: 'center', padding: '20px', color: MG(0.35), fontSize: '12px' }}>{t('memoria.noData')}</div>
             )}
           </div>
         )

@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Button, Checkbox } from '@hermes/sdk';
 import { safeNumber } from '../utils/format';
 import { t } from '../utils/i18n';
+import { API_BASE as API } from '../types';
 
-const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
 
 interface Diagnostics {
