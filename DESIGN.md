@@ -1,32 +1,26 @@
-# Mnemosyne Native Dashboard — Design & Coding Conventions
+# Mnemosyne Native Dashboard — Design & UX Guidelines
 
-This document outlines the UI/UX consistency, colors, and layout guidelines for the dashboard.
+This document defines the core styling and coding standards to keep the dashboard native, performant, and consistent.
 
 ## 1. Hermes SDK First Policy
-This dashboard is a plugin integrated within the Hermes workspace. Always use Out-Of-The-Box (OOTB) components from `@hermes/sdk` to maintain a unified theme and look:
-*   **Preferred Components**: `Card`, `CardHeader`, `CardTitle`, `CardContent`, `Badge`, `Button`, `Input`, `Select`, `Tabs`, `TabsList`, `TabsTrigger`, `Checkbox`.
-*   **Custom Styling**: Only write custom CSS or vanilla HTML layouts when the SDK components cannot support the required behavior.
+Always prioritize Out-Of-The-Box (OOTB) components from `@hermes/sdk` (`Card`, `Badge`, `Button`, `Input`, `Select`, `Tabs`, `Checkbox`).
+*   **Custom Styling**: Only write custom CSS or vanilla HTML layouts when native SDK components cannot support the required behavior.
 
-## 2. UI/UX Consistency Rules
-*   **Section Headers**: `fontSize: '15px'`, `fontWeight: 600` for titles + `fontSize: '12px'`, `color: MG(0.45)` for subtitles.
-*   **Card Inner Headers**: `fontSize: '12px'` for `CardTitle` inside breakdowns.
-*   **Metric Labels**: `fontSize: '10px'`, UPPERCASE with `letterSpacing: '0.08em'`.
-*   **Session Links**: Displayed in monospace as `session:{shortId(id)}`, underlined, and clickable.
-*   **Row Hover**: Interactive rows must default to `background: MG(0.03)` (or transparent/card bg), transition to `MG(0.07)` on hover, with a duration of `0.15s`.
-*   **Empty States**: Centered, `fontSize: '12px'`, `color: MG(0.35)`, `padding: '20px'`. Use `1px dashed MG(0.15)` borders for primary empty containers.
-*   **Loading States**: Centered, `color: MG(0.4)`, `padding: '32px'`.
+## 2. Core UI & UX Standards
+*   **Typography Hierarchy**:
+    *   Main Tab Title: `fontSize: '15px'`, `fontWeight: 600` (Subtitle: `12px`, `color: MG(0.45)`).
+    *   Breakdown Cards: Inner headers should use `fontSize: '12px'` for titles.
+    *   Metric Labels: Upper-case with `fontSize: '10px'`.
+*   **List Item Hover**: All interactive rows must have a smooth hover transition:
+    *   `transition: 'background 0.15s'`
+    *   Default background `MG(0.03)` (or card/list bg), transitioning to `MG(0.07)` on hover.
+*   **States**:
+    *   **Empty States**: Centered text, `fontSize: '12px'`, `color: MG(0.35)`, `padding: '20px'`. Primary empty lists should use a `1px dashed MG(0.15)` border container.
+    *   **Loading States**: Centered text, `color: MG(0.4)`, `padding: '20px'` or `32px`.
+*   **Casing**: Use Title Case for titles, buttons, tabs, and headers; use Sentence case for descriptions, empty states, and badge statuses.
 
-## 3. Colors & Badge Color Scheme
-Do not use generic raw color codes. Use theme tokens or the opacity function `MG(opacity)` where `MG = (o: number) => rgba(234,234,234,o)`.
-Badge backgrounds are restricted to:
-*   **Veracity**: `stated` (#065f46), `inferred` (#1e3a8a), `tool` (#581c87), `imported` (#78350f), `unknown` (MG(0.1)).
-*   **Lifecycle**: `hot` (#991b1b), `warm` (#854d0e), `cold` (#1e3a8a).
-*   **Status**: Active (#065f46), Inactive (#991b1b).
-*   **Alerts**: Needs Review (rgba(239,68,68,0.1) / color: #f87171), High Importance (rgba(245,158,11,0.1) / color: #fbbf24).
-
-## 4. Code & Text Conventions
-*   **Imports & Modules**: All tab components live in `web/src/components/` and must use named exports (never default exports).
-*   **Numeric Display**: Always wrap values in `safeNumber(val, decimals, fallback?)` from `web/src/utils/format.ts`. Never use raw `.toFixed()`.
-*   **UUID Truncation**: Truncate session UUIDs using `shortId(id)`.
-*   **Loop Variables**: Never shadow the `t` localization helper. Use `tItem`, `cItem`, etc.
-*   **Text Casing**: Use Title Case for tab labels, section/card headers, metric labels, button CTAs, and metadata fields. Use Sentence case for empty states and API badge values.
+## 3. Formatting & Coding Conventions
+*   **Local Badge Colors**: Use consistent local maps (e.g., `VERACITY_COLOR`) to color badges semantically (green = stated/active, red = hot/inactive, blue/purple = inferred/tool).
+*   **Numerical Display**: Wrap numeric calculations in `safeNumber(value, digits, fallback?)` to prevent crash-on-null errors. Never use raw `.toFixed()`.
+*   **UUID display**: Truncate session UUIDs using `shortId(id)` and render in monospace.
+*   **i18n**: All user-facing strings must use the `t('namespace.key')` translation helper.
