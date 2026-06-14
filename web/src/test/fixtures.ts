@@ -126,3 +126,19 @@ export const profileResponse = () => ({
     }
   ]
 });
+
+export const graphResponse = () => ({
+  nodes: [
+    { id: 'node-1', label: 'Operator', type: 'entity' },
+    { id: 'node-2', label: 'Hermes', type: 'agent' }
+  ],
+  edges: [
+    { id: 'edge-1', source: 'node-1', target: 'node-2', predicate: 'interacts_with', confidence: 0.95 }
+  ]
+});
+
+export const triplesResponse = () => ({
+  items: [
+    { id: 'edge-1', subject: 'Operator', predicate: 'interacts_with', object: 'Hermes', confidence: 0.95 }
+  ]
+});
