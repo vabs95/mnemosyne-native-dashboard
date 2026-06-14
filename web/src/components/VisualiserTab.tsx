@@ -1200,7 +1200,7 @@ function addPulsePoints(THREE: ThreeModule, vis: any, themeColors: any, nextMode
         setThreeReady(true);
       })
       .catch((err: any) => {
-        if (!cancelled) setThreeError(err?.message || 'Failed to load 3D engine');
+        if (!cancelled) setThreeError(err?.message || t('visualiser.engineLoadError'));
       });
 
     return () => {
@@ -1921,7 +1921,7 @@ function addPulsePoints(THREE: ThreeModule, vis: any, themeColors: any, nextMode
               {mode === 'neural' ? t('visualiser.neuralInspector') : t('visualiser.constellationInspector')}
             </div>
             <CardTitle style={{ fontSize: '15px', fontWeight: 600, marginTop: '10px', lineHeight: 1.4 }}>
-              {selectedNode ? (selectedNode.kind === 'memory' ? 'Memory Record' : labelForDisplay(selectedNode.label)) : t('visualiser.nothingSelected')}
+              {selectedNode ? (selectedNode.kind === 'memory' ? t('index.memoryRecord') : labelForDisplay(selectedNode.label)) : t('visualiser.nothingSelected')}
             </CardTitle>
           </CardHeader>
           <CardContent style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '18px', flex: 1, overflowY: 'auto' }}>
@@ -1936,10 +1936,10 @@ function addPulsePoints(THREE: ThreeModule, vis: any, themeColors: any, nextMode
                 {selectedNode.kind === 'memory' && (
                   <div>
                     <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: MG(0.45), marginBottom: '8px', fontWeight: 600 }}>
-                      Entity Hub
+                      {t('visualiser.entityHub')}
                     </div>
                     {loadingDetail ? (
-                      <div style={{ fontSize: '12px', color: MG(0.4) }}>Loading metadata...</div>
+                      <div style={{ fontSize: '12px', color: MG(0.4) }}>{t('visualiser.loadingMetadata')}</div>
                     ) : selectedMemoryDetail ? (
                       <div style={{
                         display: 'grid',
@@ -1952,26 +1952,26 @@ function addPulsePoints(THREE: ThreeModule, vis: any, themeColors: any, nextMode
                         border: `1px solid ${MG(0.05)}`
                       }}>
                         <div>
-                          <span style={{ color: MG(0.4) }}>Source: </span>
-                          <span style={{ color: MG(0.8) }} title={selectedMemoryDetail.source}>{shortLabel(selectedMemoryDetail.source || 'unknown', 14)}</span>
+                          <span style={{ color: MG(0.4) }}>{t('visualiser.sourceLabel')} </span>
+                          <span style={{ color: MG(0.8) }} title={selectedMemoryDetail.source || t('common.unknown')}>{shortLabel(selectedMemoryDetail.source || t('common.unknown'), 14)}</span>
                         </div>
                         <div>
-                          <span style={{ color: MG(0.4) }}>Scope: </span>
-                          <span style={{ color: MG(0.8) }}>{selectedMemoryDetail.scope || 'unknown'}</span>
+                          <span style={{ color: MG(0.4) }}>{t('visualiser.scopeLabel')} </span>
+                          <span style={{ color: MG(0.8), textTransform: 'capitalize' }}>{selectedMemoryDetail.scope || t('common.unknown')}</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span style={{ color: MG(0.4) }}>Veracity: </span>
-                          <Badge style={{ background: VERACITY_COLOR[String(selectedMemoryDetail.veracity).toLowerCase()] || MG(0.1), padding: '2px 6px', fontSize: '9px' }}>
+                          <span style={{ color: MG(0.4) }}>{t('visualiser.veracityLabel')} </span>
+                          <Badge style={{ background: VERACITY_COLOR[String(selectedMemoryDetail.veracity).toLowerCase()] || MG(0.1), padding: '2px 6px', fontSize: '9px', textTransform: 'capitalize' }}>
                             {selectedMemoryDetail.veracity}
                           </Badge>
                         </div>
                         <div>
-                          <span style={{ color: MG(0.4) }}>Imp: </span>
+                          <span style={{ color: MG(0.4) }}>{t('visualiser.impLabel')} </span>
                           <span style={{ color: MG(0.8), fontWeight: 600 }}>{safeNumber(selectedMemoryDetail.importance, 2, 'n/a')}</span>
                         </div>
                       </div>
                     ) : (
-                      <div style={{ fontSize: '12px', color: MG(0.4) }}>Metadata unavailable.</div>
+                      <div style={{ fontSize: '12px', color: MG(0.4) }}>{t('visualiser.metadataUnavailable')}</div>
                     )}
                   </div>
                 )}
@@ -1979,7 +1979,7 @@ function addPulsePoints(THREE: ThreeModule, vis: any, themeColors: any, nextMode
                 {/* Connected Edges */}
                 <div>
                   <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: MG(0.45), marginBottom: '8px', fontWeight: 600 }}>
-                    Connected Edges
+                    {t('visualiser.connectedEdges')}
                   </div>
                   {connectedEdges.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '280px', overflowY: 'auto' }}>
@@ -2015,10 +2015,10 @@ function addPulsePoints(THREE: ThreeModule, vis: any, themeColors: any, nextMode
                         >
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
                             <span style={{ fontWeight: 600, color: MG(0.85), overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {ce.neighbor.kind === 'memory' ? 'Memory Record' : labelForDisplay(ce.neighbor.label)}
+                              {ce.neighbor.kind === 'memory' ? t('index.memoryRecord') : labelForDisplay(ce.neighbor.label)}
                             </span>
                             <span style={{ fontSize: '9px', color: MG(0.45) }}>
-                              {ce.label} ({ce.neighbor.kind || 'unknown'})
+                              {ce.label} ({ce.neighbor.kind || t('common.unknown')})
                             </span>
                           </div>
                           <Badge style={{ background: MG(0.08), color: MG(0.6) }}>
@@ -2029,7 +2029,7 @@ function addPulsePoints(THREE: ThreeModule, vis: any, themeColors: any, nextMode
                     </div>
                   ) : (
                     <div style={{ fontSize: '11px', color: MG(0.4), fontStyle: 'italic' }}>
-                      No semantic connections.
+                      {t('visualiser.noSemanticConnections')}
                     </div>
                   )}
                 </div>
