@@ -55,13 +55,13 @@ export const TodayTab: React.FC<{
 
   const resetToday = () => setDate(new Date().toISOString().split('T')[0]);
 
-  const breakdownsList: Array<[string, Array<{ label: string; count: number }> | undefined]> = digest?.breakdowns
+  const breakdownsList = digest?.breakdowns
     ? [
-        [t('today.topEntities'), digest.breakdowns.entities],
-        [t('today.trustMix'), digest.breakdowns.veracity],
-        [t('today.lifecycle'), digest.breakdowns.degradation],
-        [t('today.sources'), digest.breakdowns.sources],
-        [t('today.sessions'), digest.breakdowns.sessions],
+        { key: 'entities', label: t('today.topEntities'), rows: digest.breakdowns.entities },
+        { key: 'veracity', label: t('today.trustMix'), rows: digest.breakdowns.veracity },
+        { key: 'lifecycle', label: t('today.lifecycle'), rows: digest.breakdowns.degradation },
+        { key: 'sources', label: t('today.sources'), rows: digest.breakdowns.sources },
+        { key: 'sessions', label: t('today.sessions'), rows: digest.breakdowns.sessions },
       ]
     : [];
 
@@ -110,19 +110,72 @@ export const TodayTab: React.FC<{
               <CardHeader><CardTitle>{t('today.breakdowns')}</CardTitle></CardHeader>
               <CardContent style={{ padding: '16px 20px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '16px' }}>
-                  {breakdownsList.map(([label, rows]) => (
-                    <div key={label}>
+                  {breakdownsList.map(({ key, label, rows }) => (
+                    <div key={key}>
                       <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: MG(0.45), marginBottom: '8px' }}>{label}</div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        {(rows || []).slice(0, 6).map((row: any) => (
-                          <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '11px' }}>
-                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.label || 'unknown'}>
-                              {row.label || 'unknown'}
-                            </span>
-                            <strong>{row.count}</strong>
-                          </div>
-                        ))}
-                        {!(rows || []).length && <div style={{ color: MG(0.35), fontSize: '11px' }}>{t('common.noData')}</div>}
+                        {(rows || []).slice(0, 6).map((row: any) => {
+                          if (key === 'sessions') {
+                            return (
+                              <button
+                                key={row.label}
+                                type="button"
+                                onClick={() => onInspectSession(row.label)}
+                                style={{
+                                  display: 'flex',
+                                  width: '100%',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  background: 'rgba(234,234,234,0.02)',
+                                  border: 'none',
+                                  padding: '4px 6px',
+                                  borderRadius: '4px',
+                                  font: 'inherit',
+                                  fontSize: '11px',
+                                  cursor: 'pointer',
+                                  transition: 'background 0.15s',
+                                  color: 'inherit',
+                                  textDecoration: 'underline',
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(234,234,234,0.06)')}
+                                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(234,234,234,0.02)')}
+                              >
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--theme-font-mono)' }} title={row.label || 'unknown'}>
+                                  {shortId(row.label)}
+                                </span>
+                                <strong>{row.count}</strong>
+                              </button>
+                            );
+                          }
+
+                          const shouldCapitalize = ['veracity', 'lifecycle', 'sources'].includes(key);
+                          return (
+                            <div
+                              key={row.label}
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                gap: '8px',
+                                fontSize: '11px',
+                                padding: '4px 6px',
+                              }}
+                            >
+                              <span
+                                style={{
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  textTransform: shouldCapitalize ? 'capitalize' : 'none',
+                                }}
+                                title={row.label || 'unknown'}
+                              >
+                                {row.label || 'unknown'}
+                              </span>
+                              <strong>{row.count}</strong>
+                            </div>
+                          );
+                        })}
+                        {!(rows || []).length && <div style={{ color: MG(0.35), fontSize: '11px', padding: '4px 6px' }}>{t('common.noData')}</div>}
                       </div>
                     </div>
                   ))}

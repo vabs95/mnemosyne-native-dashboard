@@ -138,15 +138,18 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
                     width: '100%',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    background: 'none',
+                    background: 'rgba(234,234,234,0.02)',
                     border: 'none',
-                    padding: 0,
+                    padding: '6px 8px',
+                    borderRadius: '4px',
                     font: 'inherit',
                     fontSize: '12px',
                     cursor: 'pointer',
-                    textDecoration: 'underline',
+                    transition: 'background 0.15s',
                     color: 'inherit',
                   }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(234,234,234,0.06)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'rgba(234,234,234,0.02)')}
                 >
                   <span style={{ textTransform: 'capitalize' }}>{veracity}</span>
                   <Badge>{String(count)}</Badge>
@@ -174,15 +177,18 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
                       width: '100%',
                       justifyContent: 'space-between',
                       alignItems: 'center',
-                      background: 'none',
+                      background: 'rgba(234,234,234,0.02)',
                       border: 'none',
-                      padding: 0,
+                      padding: '6px 8px',
+                      borderRadius: '4px',
                       font: 'inherit',
                       fontSize: '12px',
                       cursor: 'pointer',
-                      textDecoration: 'underline',
+                      transition: 'background 0.15s',
                       color: 'inherit',
                     }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(234,234,234,0.06)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'rgba(234,234,234,0.02)')}
                   >
                     <span style={{ textTransform: 'capitalize' }}>{degradation_label}</span>
                     <Badge>{String(count)}</Badge>
@@ -209,17 +215,20 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
                     width: '100%',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    background: 'none',
+                    background: 'rgba(234,234,234,0.02)',
                     border: 'none',
-                    padding: 0,
+                    padding: '6px 8px',
+                    borderRadius: '4px',
                     font: 'inherit',
                     fontSize: '12px',
                     cursor: 'pointer',
-                    textDecoration: 'underline',
+                    transition: 'background 0.15s',
                     color: 'inherit',
                   }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(234,234,234,0.06)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'rgba(234,234,234,0.02)')}
                 >
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }} title={source}>{source || 'unknown'}</span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left', textTransform: 'capitalize' }} title={source}>{source || 'unknown'}</span>
                   <Badge>{String(count)}</Badge>
                 </button>
               ))}
@@ -243,15 +252,18 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
                     width: '100%',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    background: 'none',
+                    background: 'rgba(234,234,234,0.02)',
                     border: 'none',
-                    padding: 0,
+                    padding: '6px 8px',
+                    borderRadius: '4px',
                     font: 'inherit',
                     fontSize: '12px',
                     cursor: 'pointer',
-                    textDecoration: 'underline',
+                    transition: 'background 0.15s',
                     color: 'inherit',
                   }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(234,234,234,0.06)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'rgba(234,234,234,0.02)')}
                 >
                   <span style={{ textTransform: 'capitalize' }}>{scope || 'unknown'}</span>
                   <Badge>{String(count)}</Badge>
@@ -277,15 +289,18 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
                     width: '100%',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    background: 'none',
+                    background: 'rgba(234,234,234,0.02)',
                     border: 'none',
-                    padding: 0,
+                    padding: '6px 8px',
+                    borderRadius: '4px',
                     font: 'inherit',
                     fontSize: '12px',
                     cursor: 'pointer',
-                    textDecoration: 'underline',
+                    transition: 'background 0.15s',
                     color: 'inherit',
                   }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(234,234,234,0.06)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'rgba(234,234,234,0.02)')}
                 >
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--theme-font-mono)' }} title={session_id}>{shortId(session_id)}</span>
                   <Badge>{String(count)}</Badge>

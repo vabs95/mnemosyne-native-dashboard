@@ -71,7 +71,36 @@ The stat cards map directly to the **BEAM memory model tiers**:
 
 ## Data Sources
 
-```
+```http
 GET /api/plugins/mnemosyne-native-dashboard/stats
 GET /api/plugins/mnemosyne-native-dashboard/memories?limit=25
 ```
+
+---
+
+## Usage Guide & Value
+
+The **Overview Tab** is the central command center for operators monitoring a Mnemosyne-backed AI agent. It provides immediate visual answers to:
+1. **Agent State Ingestion**: How quickly is the agent ingesting new context? (via *Live Memory Log* and *Working Memory* counts).
+2. **Episodic Compression**: Is the agent successfully building long-term memories? If *Episodic Memory* remains 0 while *Working Memory* grows, it indicates that memory consolidation is either not configured or stuck.
+3. **KG Signal Density**: How many semantic triples are being extracted? Triples represent the structured knowledge extracted from raw text.
+4. **Data Contamination & Triage**: How many memories need human review? The *Needs Review* metric monitors memories marked with low confidence or unverified veracity.
+5. **Memory Decay**: Are memories degrading? The *Degraded* metric alerts operators to memories that have aged into a lower tier, reducing active context pollution.
+
+---
+
+## Issues Found
+
+The following issues were identified and addressed on the **Overview Tab**:
+
+1. **Inconsistent Capitalization in Breakdown Cards**
+   - **Status**: Fixed
+   - **Details**: The `by_source` mini-card was rendering source names in raw lowercase (e.g. `conversation`, `correction`), whereas other mini-cards (Trust Mix, Scopes, Lifecycle) capitalized their labels. This was corrected by adding `textTransform: 'capitalize'` to the sources list renderer.
+
+2. **Unstyled Links in Breakdown Mini-Cards**
+   - **Status**: Fixed
+   - **Details**: Mini-card breakdown rows used default underlined buttons which looked cluttered. This was redesigned to match `DESIGN.md` guidelines by replacing text underlines with premium row hover backgrounds (`rgba(234,234,234,0.02)` transitioning to `rgba(234,234,234,0.06)` on hover) and clean padding.
+
+3. **Non-Interactive Scratchpad Card**
+   - **Status**: Documented/Open
+   - **Details**: The `Scratchpad` stat card has no click handler (unlike Working/Episodic/Triples/Consolidations). This is because Scratchpad represents a system-level SQLite table (`scratchpad`) used for raw agent reasoning steps, which is not exposed in the standard Memories query endpoint.

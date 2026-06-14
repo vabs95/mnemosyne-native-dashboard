@@ -61,6 +61,30 @@ Four tabs beneath the breakdowns list the individual records for the selected da
 
 ## Data Sources
 
-```
+```http
 GET /api/plugins/mnemosyne-native-dashboard/digest/today?day=YYYY-MM-DD
 ```
+
+---
+
+## Usage Guide & Value
+
+The **Today Tab** offers a daily digest report focusing on a single date's memory footprint. It is valuable for:
+1. **Daily Activity Auditing**: Understanding exactly what thoughts were generated (`Added`) and what prior knowledge was recalled (`Retrieved`) during a specific day's runs.
+2. **Review Triage Monitoring**: Seeing if the memory store accumulated a high number of unverified memories on a specific day (which would require reviews).
+3. **Consolidation Footprint**: Tracking how many episodic summaries were compressed on a specific day, verifying if database pruning/summarization jobs ran successfully.
+4. **Day-by-Day Historical Navigation**: Operators can select any past date to diagnose issues that occurred on that specific day (e.g., debugging why a certain conversation or error occurred by reviewing what the agent was thinking).
+
+---
+
+## Issues Found
+
+The following issues were identified and addressed on the **Today Tab**:
+
+1. **Inconsistent Capitalization in Breakdowns**
+   - **Status**: Fixed
+   - **Details**: The breakdown slices for Trust Mix (`stated`, `unknown`), Lifecycle (`hot`, `warm`, `cold`), and Sources (`conversation`, `correction`) were rendered in raw lowercase, creating a mismatch with the Overview tab. Added conditional capitalization based on the card key.
+
+2. **Non-Interactive SESSIONS Breakdown Card**
+   - **Status**: Fixed
+   - **Details**: The SESSIONS breakdown card listed active sessions as plain static text, despite the documentation stating that clicking them should open the Session inspector. Refactored the sessions breakdown list to render monospaced, truncated buttons using the premium row hover backgrounds and triggering `onInspectSession` on click.
