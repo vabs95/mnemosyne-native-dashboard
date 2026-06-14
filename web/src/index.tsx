@@ -208,7 +208,7 @@ const MemoryDetailModal: React.FC<MemoryDetailModalProps> = ({
                 {memory.degradation_weight !== undefined && memory.degradation_weight !== null ? ` (×${safeNumber(memory.degradation_weight, 2)})` : ''}
               </Badge>
               <Badge style={{ background: 'rgba(234,234,234,0.06)', border: '1px solid rgba(234,234,234,0.15)' }}>
-                {t('index.effectiveWeight')} ×{safeNumber(memory.effective_memory_weight, 2, '0.00')}
+                {t('index.effectiveWeight')} ×{safeNumber(memory.effective_memory_weight, 2)}
               </Badge>
               {memory.contaminated && (
                 <Badge style={{ background: '#991b1b', color: '#fca5a5' }}>

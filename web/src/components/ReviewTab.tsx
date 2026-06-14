@@ -443,9 +443,9 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
                 if (currentQueueInfo) {
                   const filterMap: any = {
                     contaminated: { veracity: '', contaminated_only: '1' },
-                    important_contaminated: { veracity: '', contaminated_only: '1', sort: 'importance' },
+                    high_importance_contaminated: { contaminated_only: '1', sort: 'importance' },
                     degraded: { veracity: '', degraded_only: '1' },
-                    due_degradation: { veracity: '', due_for_degradation: '1' }
+                    due_for_degradation: { kind: 'episodic', due_for_degradation: '1', sort: 'oldest' }
                   };
                   onApplyFilters(filterMap[selectedQueue] || {});
                 }

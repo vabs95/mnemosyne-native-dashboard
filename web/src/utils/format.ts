@@ -1,4 +1,5 @@
 export function safeNumber(value: unknown, digits = 2, fallback = 'n/a'): string {
+  if (value === null || value === undefined || value === '') return fallback;
   const num = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(num) ? num.toFixed(digits) : fallback;
 }

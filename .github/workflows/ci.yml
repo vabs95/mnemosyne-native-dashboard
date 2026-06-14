@@ -34,6 +34,9 @@ jobs:
       - name: Type check web code
         working-directory: web
         run: npm run typecheck
+      - name: Run web UI tests
+        working-directory: web
+        run: npm run test -- --run
       - name: Ruff lint
         run: python -m ruff check .
       - name: Ruff format check
