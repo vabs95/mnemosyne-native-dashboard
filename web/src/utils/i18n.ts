@@ -198,6 +198,13 @@ export const i18n = {
     count: 'Count',
     consolidationHistory: 'Consolidation History',
     noConsolidations: 'No consolidation summaries generated yet.',
+    sessionLabel: 'session:',
+    impLabel: 'imp:',
+    noPreview: 'No preview available',
+    failedLoadSession: 'Failed to load session details: ',
+    consolidationRecord: 'Consolidation Record',
+    viewSession: 'View Session',
+    summary: 'Summary',
   },
   memoria: {
     title: 'Memoria',

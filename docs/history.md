@@ -71,3 +71,17 @@ When a session heading or session link is clicked, a detail panel expands inline
 GET /api/plugins/mnemosyne-native-dashboard/timeline
 GET /api/plugins/mnemosyne-native-dashboard/consolidations
 ```
+
+---
+
+## Usage Guide & Value
+
+- **Audit Memory Lifecycle**: Provides a chronological, tamper-evident log of memory events (creations, expirations, updates) to trace exactly when and why agent behavior changed.
+- **Analyze Grouping Modes**: Switch to **By Day** to review general activity flow, or **By Session** to trace specific conversational logs.
+- **Consolidation Inspector**: View consolidation summaries and inspect their raw JSON schema to understand exactly what facts was compressed and stored during background consolidation runs.
+
+## Issues Found & Resolved
+
+- **Accessibility & HTML Nesting Warnings**: The event rows originally used an absolute-positioned `<button>` overlaying text containers and inner buttons. This has been refactored into a `div role="button" tabIndex={0}` card with proper `onKeyDown` and mouse handlers. This resolves invalid nesting warnings, allows text selection, and permits clean interaction with nested session buttons.
+- **Incorrect Consolidation Row Action**: Clicking a consolidation row was opening session details directly, ignoring the documented JSON inspector feature. Resolved by implementing a custom **JSON Consolidation Inspector Modal** displaying the stringified consolidation data, with a dedicated CTA button to load the session details.
+- **Hardcoded Values & Localization**: Fully translated hardcoded session, importance labels, and date labels using the `t()` function. Veracity badges now show capitalized, localized terms (e.g. *Stated*, *Inferred*, *Tool*) to match the rest of the dashboard styling.

@@ -40,73 +40,65 @@ interface TimelineEventProps {
 
 const TimelineEvent: React.FC<TimelineEventProps> = ({ event, onInspectMemory, handleOpenSession }) => {
   const [hovered, setHovered] = useState(false);
-  return (
-    <div style={{ position: 'relative' }}>
-      {/* Outer button covering the whole card area */}
-      <button
-        type="button"
-        onClick={() => event.item && onInspectMemory(event.item)}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        aria-label={t('history.event')}
-        style={{
-          position: 'absolute',
-          inset: 0,
-          width: '100%',
-          height: '100%',
-          background: 'none',
-          border: 'none',
-          cursor: event.item ? 'pointer' : 'default',
-          zIndex: 1,
-        }}
-      />
+  const isClickable = !!event.item;
+  const veracity = event.item?.veracity || event.type || 'event';
+  const displayVeracity = t(`common.${String(veracity).toLowerCase()}`, { defaultValue: veracity });
+  const eventPreview = event.preview || event.title || event.item?.content || t('history.noPreview');
 
-      <div
-        style={{
-          padding: '10px 12px',
-          background: hovered && event.item ? MG(0.07) : MG(0.03),
-          border: `1px solid ${MG(0.07)}`,
-          borderRadius: '4px',
-          position: 'relative',
-          zIndex: 2,
-          pointerEvents: 'none',
-          transition: 'background 0.15s',
-        }}
-      >
-        <div style={{ fontSize: '13px', lineHeight: '1.5', marginBottom: '6px' }}>
-          {event.preview || event.title || event.item?.content || 'No preview available'}
-        </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <Badge style={{ background: VERACITY_COLOR[String(event.item?.veracity || event.type || 'event').toLowerCase()] || MG(0.1) }}>
-            {event.item?.veracity || event.type || 'event'}
-          </Badge>
-          {event.session_id && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleOpenSession(event.session_id!);
-              }}
-              style={{
-                background: 'none',
-                border: 'none',
-                padding: 0,
-                font: 'inherit',
-                fontSize: '10px',
-                fontFamily: 'var(--theme-font-mono)',
-                color: MG(0.6),
-                cursor: 'pointer',
-                textDecoration: 'underline',
-                pointerEvents: 'auto',
-              }}
-            >
-              session:{shortId(event.session_id)}
-            </button>
-          )}
-          <span style={{ fontSize: '10px', color: MG(0.4), fontFamily: 'var(--theme-font-mono)' }}>
-            {formatDateTimeLabel(event.timestamp || event.item?.created_at, 'unknown')}
-          </span>
-        </div>
+  return (
+    <div
+      role={isClickable ? 'button' : undefined}
+      tabIndex={isClickable ? 0 : undefined}
+      onClick={() => isClickable && onInspectMemory(event.item)}
+      onKeyDown={(e) => {
+        if (isClickable && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          onInspectMemory(event.item);
+        }
+      }}
+      onMouseEnter={() => isClickable && setHovered(true)}
+      onMouseLeave={() => isClickable && setHovered(false)}
+      style={{
+        padding: '10px 12px',
+        background: hovered && isClickable ? MG(0.07) : MG(0.03),
+        border: `1px solid ${MG(0.07)}`,
+        borderRadius: '4px',
+        cursor: isClickable ? 'pointer' : 'default',
+        transition: 'background 0.15s',
+      }}
+    >
+      <div style={{ fontSize: '13px', lineHeight: '1.5', marginBottom: '6px' }}>
+        {eventPreview}
+      </div>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <Badge style={{ background: VERACITY_COLOR[String(veracity).toLowerCase()] || MG(0.1) }}>
+          {displayVeracity}
+        </Badge>
+        {event.session_id && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenSession(event.session_id!);
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              font: 'inherit',
+              fontSize: '10px',
+              fontFamily: 'var(--theme-font-mono)',
+              color: MG(0.6),
+              cursor: 'pointer',
+              textDecoration: 'underline',
+            }}
+          >
+            {t('history.sessionLabel')}{shortId(event.session_id)}
+          </button>
+        )}
+        <span style={{ fontSize: '10px', color: MG(0.4), fontFamily: 'var(--theme-font-mono)' }}>
+          {formatDateTimeLabel(event.timestamp || event.item?.created_at, t('common.unknown'))}
+        </span>
       </div>
     </div>
   );
@@ -124,6 +116,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ onInspectMemory }) => {
   const [timeline, setTimeline] = useState<TimelineGroup[]>([]);
   const [consolidations, setConsolidations] = useState<ConsolidationItem[]>([]);
   const [selectedSession, setSelectedSession] = useState<SessionDetail | null>(null);
+  const [selectedConsolidation, setSelectedConsolidation] = useState<ConsolidationItem | null>(null);
   const [grouping, setGrouping] = useState<'day' | 'session'>('day');
   const [loading, setLoading] = useState(true);
 
@@ -148,7 +141,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ onInspectMemory }) => {
       const data = await fetchJSON(`${API}/session?id=${encodeURIComponent(sessionId)}&limit=200`);
       setSelectedSession(data);
     } catch (err: any) {
-      alert(`Failed to load session details: ${err.message}`);
+      alert(`${t('history.failedLoadSession')}${err.message}`);
     }
   }
 
@@ -249,8 +242,8 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ onInspectMemory }) => {
                   >
                     <div style={{ lineHeight: '1.5', marginBottom: '4px' }}>{m.content}</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: MG(0.4), fontFamily: 'var(--theme-font-mono)' }}>
-                      <span>{m.veracity}</span>
-                      <span>imp:{safeNumber(m.importance, 2, 'n/a')}</span>
+                      <span>{t(`common.${String(m.veracity).toLowerCase()}`, { defaultValue: m.veracity })}</span>
+                      <span>{t('history.impLabel')}{safeNumber(m.importance, 2, 'N/A')}</span>
                     </div>
                   </button>
                 ))}
@@ -268,7 +261,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ onInspectMemory }) => {
                   <button
                     key={c.id}
                     type="button"
-                    onClick={() => handleOpenSession(c.session_id)}
+                    onClick={() => setSelectedConsolidation(c)}
                     style={{
                       display: 'block',
                       width: '100%',
@@ -287,7 +280,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ onInspectMemory }) => {
                   >
                     <div style={{ fontSize: '12px', lineHeight: '1.5', marginBottom: '6px' }}>{c.summary}</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: MG(0.4), fontFamily: 'var(--theme-font-mono)' }}>
-                      <span style={{ textDecoration: 'underline' }}>session:{shortId(c.session_id)}</span>
+                      <span style={{ textDecoration: 'underline' }}>{t('history.sessionLabel')}{shortId(c.session_id)}</span>
                       <span>{new Date(c.created_at).toLocaleDateString()}</span>
                     </div>
                   </button>
@@ -299,6 +292,69 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ onInspectMemory }) => {
           </CardContent>
         </Card>
       </div>
+
+      {/* JSON Consolidation Inspector Modal */}
+      {selectedConsolidation && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+          backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center',
+          justifyContent: 'center', zIndex: 9999, padding: '16px',
+        }}>
+          <div style={{
+            width: '100%', maxWidth: '600px', maxHeight: '85vh',
+            background: 'var(--background-base)', border: `1px solid ${MG(0.12)}`,
+            borderRadius: '4px', overflow: 'hidden', display: 'flex', flexDirection: 'column',
+          }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '16px 20px', borderBottom: `1px solid ${MG(0.1)}`,
+              background: MG(0.03),
+            }}>
+              <div>
+                <div style={{ fontSize: '10px', textTransform: 'uppercase', color: MG(0.4), marginBottom: '4px' }}>
+                  {t('history.consolidationRecord')}
+                </div>
+                <div style={{ fontSize: '12px', fontWeight: 600 }}>{selectedConsolidation.id}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedConsolidation(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: MG(0.5), fontSize: '18px' }}
+              >✕</button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <div style={{ fontSize: '10px', color: MG(0.4), textTransform: 'uppercase', marginBottom: '4px' }}>
+                  {t('history.summary')}
+                </div>
+                <div style={{ fontSize: '13px', lineHeight: '1.5' }}>{selectedConsolidation.summary}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '10px', color: MG(0.4), textTransform: 'uppercase', marginBottom: '4px' }}>
+                  JSON Data
+                </div>
+                <pre style={{
+                  margin: 0, padding: '12px', background: MG(0.03), border: `1px solid ${MG(0.07)}`,
+                  borderRadius: '4px', fontSize: '11px', fontFamily: 'var(--theme-font-mono)',
+                  overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: MG(0.8)
+                }}>
+                  {JSON.stringify(selectedConsolidation, null, 2)}
+                </pre>
+              </div>
+            </div>
+            <div style={{ padding: '12px 20px', borderTop: `1px solid ${MG(0.1)}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Button ghost onClick={() => {
+                const sessionId = selectedConsolidation.session_id;
+                setSelectedConsolidation(null);
+                handleOpenSession(sessionId);
+              }}>
+                {t('history.viewSession')}
+              </Button>
+              <Button onClick={() => setSelectedConsolidation(null)}>{t('common.close')}</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
