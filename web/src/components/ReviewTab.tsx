@@ -149,7 +149,7 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
       setSelectedIds(new Set());
       loadReviewQueues(false);
     } catch (err: any) {
-      alert(err.message || 'Operation failed');
+      alert(err.message || t('review.operationFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -157,7 +157,7 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
 
   const handleConfirmSelected = () => {
     if (!selectedIds.size) return;
-    if (confirm(`Mark ${selectedIds.size} selected memories as stated?`)) {
+    if (confirm(t('review.confirmMarkStated').replace('{count}', String(selectedIds.size)))) {
       runBulkAction(`${API}/admin/memory/veracity`, id => ({ memory_id: id, veracity: 'stated', backup: true }));
     }
   };
@@ -174,7 +174,7 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
 
   const handleExpireSelected = () => {
     if (!selectedIds.size) return;
-    if (confirm(`Expire ${selectedIds.size} selected memories?`)) {
+    if (confirm(t('review.confirmExpire').replace('{count}', String(selectedIds.size)))) {
       runBulkAction(`${API}/admin/memory/invalidate`, id => ({ memory_id: id, backup: true }));
     }
   };
@@ -224,7 +224,7 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
                 <Badge>{m.status || 'active'}</Badge>
                 <Badge style={{ background: VERACITY_COLOR[String(m.veracity).toLowerCase()] || MG(0.1) }}>{m.veracity}</Badge>
                 {m.degradation_label && <Badge>{m.degradation_label}</Badge>}
-                <span style={{ fontSize: '11px', color: MG(0.4) }}>imp:{safeNumber(m.importance, 2)}</span>
+                <span style={{ fontSize: '11px', color: MG(0.4) }}>{t('review.impLabel')}{safeNumber(m.importance, 2)}</span>
                 {m.session_id && (
                   <button
                     type="button"
@@ -241,7 +241,7 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
                       textDecoration: 'underline',
                     }}
                   >
-                    session:{shortId(m.session_id)}
+                    {t('review.sessionLabel')}{shortId(m.session_id)}
                   </button>
                 )}
                 <span style={{ fontSize: '11px', color: MG(0.4) }}>{formatDateTimeLabel(m.created_at)}</span>
@@ -272,10 +272,10 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
 
               {/* Reason badges */}
               <div style={{ display: 'flex', gap: '4px', marginTop: '8px', flexWrap: 'wrap' }}>
-                {(selectedQueue === 'contaminated' || m.veracity !== 'stated') && <span style={{ fontSize: '10px', background: 'rgba(239,68,68,0.1)', color: '#f87171', padding: '2px 6px', borderRadius: '2px' }}>Needs review</span>}
-                {(selectedQueue === 'important_contaminated' || m.importance >= 0.75) && <span style={{ fontSize: '10px', background: 'rgba(245,158,11,0.1)', color: '#fbbf24', padding: '2px 6px', borderRadius: '2px' }}>High importance</span>}
-                {(selectedQueue === 'degraded' || (m.degradation_tier && m.degradation_tier > 1)) && <span style={{ fontSize: '10px', background: 'rgba(96,165,250,0.1)', color: '#60a5fa', padding: '2px 6px', borderRadius: '2px' }}>Degraded</span>}
-                {selectedQueue === 'due_degradation' && <span style={{ fontSize: '10px', background: 'rgba(167,139,250,0.1)', color: '#a78bfa', padding: '2px 6px', borderRadius: '2px' }}>Due for degradation</span>}
+                {(selectedQueue === 'contaminated' || m.veracity !== 'stated') && <span style={{ fontSize: '10px', background: 'rgba(239,68,68,0.1)', color: '#f87171', padding: '2px 6px', borderRadius: '2px' }}>{t('review.needsReviewBadge')}</span>}
+                {(selectedQueue === 'important_contaminated' || m.importance >= 0.75) && <span style={{ fontSize: '10px', background: 'rgba(245,158,11,0.1)', color: '#fbbf24', padding: '2px 6px', borderRadius: '2px' }}>{t('review.highImportanceBadge')}</span>}
+                {(selectedQueue === 'degraded' || (m.degradation_tier && m.degradation_tier > 1)) && <span style={{ fontSize: '10px', background: 'rgba(96,165,250,0.1)', color: '#60a5fa', padding: '2px 6px', borderRadius: '2px' }}>{t('review.degradedBadge')}</span>}
+                {selectedQueue === 'due_degradation' && <span style={{ fontSize: '10px', background: 'rgba(167,139,250,0.1)', color: '#a78bfa', padding: '2px 6px', borderRadius: '2px' }}>{t('review.dueDegradationBadge')}</span>}
               </div>
             </div>
           </div>
@@ -340,13 +340,15 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
               <span style={{ fontSize: '10px', color: MG(0.4), textTransform: 'uppercase' }}>{t('review.title')}</span>
               <Select value={selectedQueue} onValueChange={(val: any) => { setSelectedQueue(val); setOffset(0); }}>
                 {cards.map(c => (
-                  <SelectOption key={c.key} value={c.key}>{c.title} ({c.count})</SelectOption>
+                  <SelectOption key={c.key} value={c.key}>
+                    {c.title.replace(/\b\w/g, char => char.toUpperCase())} ({c.count})
+                  </SelectOption>
                 ))}
               </Select>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '200px' }}>
-              <span style={{ fontSize: '10px', color: MG(0.4), textTransform: 'uppercase' }}>Search</span>
+              <span style={{ fontSize: '10px', color: MG(0.4), textTransform: 'uppercase' }}>{t('common.search')}</span>
               <Input
                 placeholder={t('review.searchPlaceholder')}
                 value={searchQuery}
@@ -359,7 +361,7 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: MG(0.4), textTransform: 'uppercase' }}>
                 <span>{t('review.minImportance')}</span>
                 <span style={{ fontFamily: 'var(--theme-font-mono)' }}>
-                  {Number(minImportance) > 0 ? `≥ ${safeNumber(minImportance, 2)}` : 'any'}
+                  {Number(minImportance) > 0 ? `≥ ${safeNumber(minImportance, 2)}` : t('common.any')}
                 </span>
               </div>
               <input
@@ -403,11 +405,11 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
               <div style={{ width: '120px' }}>
                 <Select value="" onValueChange={handleSetTrust} disabled={!selectedIds.size || submitting}>
                   <SelectOption value="">{t('review.setTrust')}</SelectOption>
-                  <SelectOption value="stated">stated</SelectOption>
-                  <SelectOption value="inferred">inferred</SelectOption>
-                  <SelectOption value="tool">tool</SelectOption>
-                  <SelectOption value="imported">imported</SelectOption>
-                  <SelectOption value="unknown">unknown</SelectOption>
+                  <SelectOption value="stated">{t('common.stated')}</SelectOption>
+                  <SelectOption value="inferred">{t('common.inferred')}</SelectOption>
+                  <SelectOption value="tool">{t('common.tool')}</SelectOption>
+                  <SelectOption value="imported">{t('common.imported')}</SelectOption>
+                  <SelectOption value="unknown">{t('common.unknown')}</SelectOption>
                 </Select>
               </div>
 
@@ -433,7 +435,7 @@ export const ReviewTab: React.FC<ReviewTabProps> = ({ onInspectMemory, onInspect
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
           <div>
-            <div style={{ fontSize: '14px', fontWeight: 600 }}>{currentQueueInfo?.title || selectedQueue}</div>
+            <div style={{ fontSize: '14px', fontWeight: 600, textTransform: 'capitalize' }}>{currentQueueInfo?.title || selectedQueue}</div>
             <div style={{ fontSize: '12px', color: MG(0.4) }}>{currentQueueInfo?.description || ''}</div>
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>

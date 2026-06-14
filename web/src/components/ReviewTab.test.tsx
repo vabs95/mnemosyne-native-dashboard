@@ -56,7 +56,7 @@ describe('ReviewTab', () => {
     const onApplyFilters = vi.fn();
     render(<ReviewTab adminMode={false} onInspectMemory={vi.fn()} onInspectSession={vi.fn()} onApplyFilters={onApplyFilters} />);
 
-    await userEvent.click(await screen.findByText('Open filtered browser'));
+    await userEvent.click(await screen.findByText(/Open Filtered Browser/i));
     expect(onApplyFilters).toHaveBeenCalledWith({ veracity: '', contaminated_only: '1' });
   });
 
@@ -65,7 +65,7 @@ describe('ReviewTab', () => {
     render(<ReviewTab adminMode={false} onInspectMemory={vi.fn()} onInspectSession={vi.fn()} onApplyFilters={onApplyFilters} />);
 
     await userEvent.selectOptions(await screen.findByDisplayValue('Contaminated (1)'), 'due_for_degradation');
-    await userEvent.click(screen.getByText('Open filtered browser'));
+    await userEvent.click(screen.getByText(/Open Filtered Browser/i));
 
     expect(onApplyFilters).toHaveBeenCalledWith({
       kind: 'episodic',
@@ -79,7 +79,7 @@ describe('ReviewTab', () => {
     render(<ReviewTab adminMode={false} onInspectMemory={vi.fn()} onInspectSession={vi.fn()} onApplyFilters={onApplyFilters} />);
 
     await userEvent.selectOptions(await screen.findByDisplayValue('Contaminated (1)'), 'high_importance_contaminated');
-    await userEvent.click(screen.getByText('Open filtered browser'));
+    await userEvent.click(screen.getByText(/Open Filtered Browser/i));
 
     expect(onApplyFilters).toHaveBeenCalledWith({
       contaminated_only: '1',
