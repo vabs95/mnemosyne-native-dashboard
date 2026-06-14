@@ -323,10 +323,17 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
         <CardContent>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             {memories.map(m => (
-              <button
+              <div
                 key={m.id}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => onInspectMemory(m)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onInspectMemory(m);
+                  }
+                }}
                 style={{
                   display: 'flex',
                   width: '100%',
@@ -370,7 +377,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onInspectMemory, onIns
                 <span style={{ fontSize: '11px', color: MG(0.35), whiteSpace: 'nowrap', fontFamily: 'var(--theme-font-mono)' }}>
                   {formatRelativeTime(m.created_at, timeAgo(m.created_at))}
                 </span>
-              </button>
+              </div>
             ))}
             {!memories.length && <div style={{ color: MG(0.35), fontSize: '12px', textAlign: 'center', padding: '20px' }}>{t('overview.noMemories')}</div>}
           </div>
