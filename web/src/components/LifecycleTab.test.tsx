@@ -15,7 +15,7 @@ describe('LifecycleTab', () => {
 
     expect(await screen.findByText('Lifecycle')).toBeInTheDocument();
     expect(screen.getByText(/Tier 2 after/)).toBeInTheDocument();
-    expect(screen.getByText(/hot/)).toBeInTheDocument();
+    expect(screen.getByText(/weights:.*hot/i)).toBeInTheDocument();
     expect(screen.getByText('Read-only: no degradation is triggered from this page')).toBeInTheDocument();
     expect(screen.queryByText('Admin Actions')).not.toBeInTheDocument();
 
@@ -30,7 +30,7 @@ describe('LifecycleTab', () => {
     await userEvent.click(warmLabels[0]);
     expect(onApplyFilters).toHaveBeenCalledWith({ degradation_tier: '2' });
 
-    await userEvent.click(screen.getByText('Open lifecycle filter'));
+    await userEvent.click(screen.getByText(/Open Lifecycle Filter/i));
     expect(onApplyFilters).toHaveBeenCalledWith({ degradation_tier: '2' });
   });
 });

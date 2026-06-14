@@ -43,6 +43,9 @@ export const i18n = {
     inferred: 'Inferred',
     tool: 'Tool',
     imported: 'Imported',
+    hot: 'Hot',
+    warm: 'Warm',
+    cold: 'Cold',
   },
   overview: {
     workingMemory: 'Working Memory',
@@ -177,7 +180,7 @@ export const i18n = {
     weights: 'Weights',
     readOnlyNotice: 'Read-only: no degradation is triggered from this page',
     listed: 'listed',
-    openFilter: 'Open lifecycle filter',
+    openFilter: 'Open Lifecycle Filter',
     noItems: 'No items in this queue. This queue is clear for now.',
     loadingLifecycle: 'Loading lifecycle diagnostics...',
   },

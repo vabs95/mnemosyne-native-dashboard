@@ -65,7 +65,7 @@ export const LifecycleTab: React.FC<{
           <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontSize: '12px', color: MG(0.7) }}>
             <span>{t('lifecycle.tier2After')} <strong>{thresholds?.tier2_days ?? 30} {t('lifecycle.days')}</strong></span>
             <span>{t('lifecycle.tier3After')} <strong>{thresholds?.tier3_days ?? 180} {t('lifecycle.days')}</strong></span>
-            <span>{t('lifecycle.weights')}: hot ×{safeNumber(weights['1'] ?? 1, 2)} · warm ×{safeNumber(weights['2'] ?? 0.5, 2)} · cold ×{safeNumber(weights['3'] ?? 0.25, 2)}</span>
+            <span>{t('lifecycle.weights')}: {t('common.hot')} ×{safeNumber(weights['1'] ?? 1, 2)} · {t('common.warm')} ×{safeNumber(weights['2'] ?? 0.5, 2)} · {t('common.cold')} ×{safeNumber(weights['3'] ?? 0.25, 2)}</span>
             <span style={{ color: '#fbbf24' }}>{t('lifecycle.readOnlyNotice')}</span>
           </div>
         </CardContent>
@@ -116,7 +116,7 @@ export const LifecycleTab: React.FC<{
           <div key={key}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '8px', borderBottom: `1px solid ${MG(0.08)}`, paddingBottom: '6px' }}>
               <div>
-                <div style={{ fontSize: '14px', fontWeight: 600 }}>{q.title || key}</div>
+                <div style={{ fontSize: '14px', fontWeight: 600, textTransform: 'capitalize' }}>{q.title || key}</div>
                 <div style={{ fontSize: '12px', color: MG(0.4) }}>{q.description || ''}</div>
               </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -144,9 +144,9 @@ export const LifecycleTab: React.FC<{
                     onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
                   >
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center', fontSize: '11px' }}>
-                      <Badge style={{ background: VERACITY_COLOR[String(m.veracity).toLowerCase()] || MG(0.1) }}>{m.veracity}</Badge>
-                      {m.degradation_label && <Badge>{m.degradation_label}</Badge>}
-                      <span style={{ color: MG(0.4) }}>imp:{safeNumber(m.importance, 2)}</span>
+                      <Badge style={{ background: VERACITY_COLOR[String(m.veracity).toLowerCase()] || MG(0.1), textTransform: 'capitalize' }}>{m.veracity}</Badge>
+                      {m.degradation_label && <Badge style={{ textTransform: 'capitalize' }}>{m.degradation_label}</Badge>}
+                      <span style={{ color: MG(0.4) }}>{t('review.impLabel')}{safeNumber(m.importance, 2)}</span>
                       {m.session_id && (
                         <button
                           type="button"
@@ -162,7 +162,7 @@ export const LifecycleTab: React.FC<{
                             textDecoration: 'underline',
                           }}
                         >
-                          session:{shortId(m.session_id)}
+                          {t('review.sessionLabel')}{shortId(m.session_id)}
                         </button>
                       )}
                       <span style={{ color: MG(0.4) }}>{formatDateTimeLabel(m.created_at)}</span>
