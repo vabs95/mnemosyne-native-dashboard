@@ -608,7 +608,7 @@ const MnemosyneDashboard: React.FC = () => {
           />
         );
       case 'profile':
-        return <ContextBankTab />;
+        return <ContextBankTab onApplyFilters={(f) => handleApplyFilters(f, setActiveValue)} />;
       case 'lifecycle':
         return (
           <LifecycleTab

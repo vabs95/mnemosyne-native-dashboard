@@ -22,11 +22,15 @@ interface ProfileSection {
   }>;
 }
 
+interface ContextBankTabProps {
+  onApplyFilters?: (filters: Record<string, string>) => void;
+}
+
 /**
  * ContextBankTab Component
  * Renders read-only inferred profile banks and topic models.
  */
-export const ContextBankTab: React.FC = () => {
+export const ContextBankTab: React.FC<ContextBankTabProps> = ({ onApplyFilters }) => {
   const [sections, setSections] = useState<ProfileSection[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -52,7 +56,7 @@ export const ContextBankTab: React.FC = () => {
             <Card key={section.name}>
               <CardHeader>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <CardTitle>{section.name.replace(/_/g, ' ')}</CardTitle>
+                  <CardTitle style={{ textTransform: 'capitalize' }}>{section.name.replace(/_/g, ' ')}</CardTitle>
                   <Badge>{section.count} {section.count === 1 ? t('contextBank.item') : t('contextBank.items')}</Badge>
                 </div>
               </CardHeader>
@@ -67,16 +71,41 @@ export const ContextBankTab: React.FC = () => {
                       }}>
                         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, paddingRight: '8px' }}>
                           <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</span>
-                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
-                            {item.context_type && <Badge>{item.context_type}</Badge>}
-                            {item.confidence_label && <Badge>{item.confidence_label}</Badge>}
-                            {item.source && <span style={{ fontSize: '10px', color: MG(0.45) }}>{item.source}</span>}
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px', alignItems: 'center' }}>
+                            {item.context_type && <Badge style={{ textTransform: 'capitalize' }}>{item.context_type}</Badge>}
+                            {item.confidence_label && <Badge style={{ textTransform: 'capitalize' }}>{item.confidence_label}</Badge>}
+                            {item.source && (
+                              onApplyFilters ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const src = item.source || '';
+                                    const isSession = src.startsWith('sess_') || src.length === 36;
+                                    onApplyFilters(isSession ? { session_id: src } : { source: src });
+                                  }}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    padding: 0,
+                                    font: 'inherit',
+                                    fontSize: '10px',
+                                    color: MG(0.6),
+                                    cursor: 'pointer',
+                                    textDecoration: 'underline',
+                                  }}
+                                >
+                                  {item.source}
+                                </button>
+                              ) : (
+                                <span style={{ fontSize: '10px', color: MG(0.45) }}>{item.source}</span>
+                              )
+                            )}
                           </div>
                           {item.preview && <span style={{ fontSize: '11px', color: MG(0.4), overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '4px' }}>{item.preview}</span>}
                         </div>
                         <div style={{ fontSize: '10px', fontFamily: 'var(--theme-font-mono)', color: MG(0.45), whiteSpace: 'nowrap', display: 'flex', gap: '8px' }}>
-                          <span>count:{item.count}</span>
-                          <span>w:{safeNumber(item.confidence_pct ?? item.importance ?? item.count, 2, 'n/a')}</span>
+                          <span>{t('contextBank.countLabel')}{item.count}</span>
+                          <span>{t('contextBank.weightLabel')}{safeNumber(item.confidence_pct ?? item.importance ?? item.count, 2, 'n/a')}</span>
                         </div>
                       </div>
                     ))

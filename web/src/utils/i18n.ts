@@ -251,6 +251,8 @@ export const i18n = {
     item: 'item',
     noActiveContext: 'No active context found in this segment.',
     noRecords: 'No inferred profile records found.',
+    countLabel: 'count:',
+    weightLabel: 'w:',
   },
   visualiser: {
     title: 'Memory Constellation 3D',

@@ -93,3 +93,36 @@ export const sessionResponse = () => ({
     },
   ],
 });
+
+export const profileResponse = () => ({
+  sections: [
+    {
+      name: 'user_preferences',
+      count: 2,
+      items: [
+        {
+          id: 'pref-001',
+          label: 'Prefers dark mode',
+          count: 1,
+          preview: 'User requested dark mode during setup',
+          importance: 0.9,
+          confidence_pct: 0.95,
+          confidence_label: 'high',
+          context_type: 'preference',
+          source: 'sess_1234567890',
+        },
+        {
+          id: 'pref-002',
+          label: 'Code style: Tabs',
+          count: 3,
+          preview: 'Consistent tabs usage',
+          importance: 0.6,
+          confidence_pct: 0.7,
+          confidence_label: 'medium',
+          context_type: 'preference',
+          source: 'chat',
+        }
+      ]
+    }
+  ]
+});
