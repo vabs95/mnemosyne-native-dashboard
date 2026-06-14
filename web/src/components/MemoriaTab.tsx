@@ -110,8 +110,8 @@ export const MemoriaTab: React.FC<{
         onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
       >
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>
-          {item.fact_type && <Badge>{item.fact_type}</Badge>}
-          {item.importance && <Badge>imp:{safeNumber(item.importance, 2)}</Badge>}
+          {item.fact_type && <Badge style={{ textTransform: 'capitalize' }}>{item.fact_type}</Badge>}
+          {item.importance && <Badge>{t('review.impLabel')}{safeNumber(item.importance, 2)}</Badge>}
           {item.session_id && item.session_id !== 'default' && (
             <button
               type="button"
@@ -128,7 +128,7 @@ export const MemoriaTab: React.FC<{
                 textDecoration: 'underline',
               }}
             >
-              session:{shortId(item.session_id)}
+              {t('review.sessionLabel')}{shortId(item.session_id)}
             </button>
           )}
         </div>
@@ -156,7 +156,7 @@ export const MemoriaTab: React.FC<{
       >
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>
           {date && <Badge>{date}</Badge>}
-          {item.source && <Badge>{item.source}</Badge>}
+          {item.source && <Badge style={{ textTransform: 'capitalize' }}>{item.source}</Badge>}
           {item.session_id && item.session_id !== 'default' && (
             <button
               type="button"
@@ -173,7 +173,7 @@ export const MemoriaTab: React.FC<{
                 textDecoration: 'underline',
               }}
             >
-              session:{shortId(item.session_id)}
+              {t('review.sessionLabel')}{shortId(item.session_id)}
             </button>
           )}
         </div>
@@ -201,7 +201,7 @@ export const MemoriaTab: React.FC<{
         onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
       >
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>
-          {topic && <Badge>{topic}</Badge>}
+          {topic && <Badge style={{ textTransform: 'capitalize' }}>{topic}</Badge>}
           <Badge style={{ background: isActive ? '#065f46' : '#991b1b' }}>{isActive ? t('common.active') : t('common.inactive')}</Badge>
           {item.session_id && item.session_id !== 'default' && (
             <button
@@ -219,7 +219,7 @@ export const MemoriaTab: React.FC<{
                 textDecoration: 'underline',
               }}
             >
-              session:{shortId(item.session_id)}
+              {t('review.sessionLabel')}{shortId(item.session_id)}
             </button>
           )}
         </div>

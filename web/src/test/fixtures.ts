@@ -142,3 +142,27 @@ export const triplesResponse = () => ({
     { id: 'edge-1', subject: 'Operator', predicate: 'interacts_with', object: 'Hermes', confidence: 0.95 }
   ]
 });
+
+export const memoriaStatsResponse = () => ({
+  tables: {
+    memoria_facts: { count: 17 },
+    memoria_timelines: { count: 0 },
+    memoria_instructions: { count: 2 },
+    memoria_kg: { count: 1 },
+    memoria_preferences: { count: 3 }
+  },
+  top_sessions: [
+    { session_id: 'sess_999', count: 11 }
+  ]
+});
+
+export const memoriaListResponse = (key: string) => {
+  if (key === 'facts') {
+    return {
+      items: [
+        { id: 'fact-1', key: 'User Name', value: 'Seth', fact_type: 'identity', importance: 0.95, session_id: 'sess_999' }
+      ]
+    };
+  }
+  return { items: [] };
+};

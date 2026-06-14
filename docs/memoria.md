@@ -71,3 +71,35 @@ GET /api/plugins/mnemosyne-native-dashboard/memoria/instructions
 GET /api/plugins/mnemosyne-native-dashboard/memoria/kg
 GET /api/plugins/mnemosyne-native-dashboard/memoria/preferences
 ```
+
+---
+
+## Usage Guide & Value
+
+The Memoria tab serves as the primary dashboard for reviewing the **Memoria 3.x schema fact store**. In the BEAM memory model, agents do not merely accumulate unstructured logs—they systematically structure knowledge into distinct categories:
+1. **Facts**: Specific entity properties (e.g. `User Name = Seth`).
+2. **Timelines**: Chronological user-historical event sequences.
+3. **Instructions**: Hard behavioral directives stored for agent operations.
+4. **Knowledge Graph (KG)**: Inter-connected concept mappings.
+5. **Preferences**: Learned preferences for interaction formatting.
+
+### Operational Value
+- **Tabular Inspectability**: Provides direct tabs for facts, timelines, instructions, KG, and preferences, allowing developers or operators to check exactly what the agent is learning.
+- **Direct Traceability**: Includes clickable session references next to facts/instructions, making it possible to jump to session details and trace exactly why the agent inferred a given preference or fact.
+
+---
+
+## Issues Found & Resolved
+
+1. **Broken Translation Keys in Sub-tabs**:
+   - *Issue*: Sub-tabs were literally displaying their translation keys (e.g., `memoria.facts`, `memoria.timelines`, etc.) because the underlying translations were not defined in `i18n.ts`.
+   - *Fix*: Added the missing translations (`facts`, `timelines`, `instructions`, `kg`, `preferences`) inside the `memoria` namespace in `i18n.ts`, resolving the broken UI labels.
+2. **Hardcoded Labels**:
+   - *Issue*: Row labels like `imp:` (importance) and `session:` were hardcoded in English.
+   - *Fix*: Transformed the hardcoded labels to reference `t('review.impLabel')` and `t('review.sessionLabel')` from the global i18n object.
+3. **Missing Casing Styles**:
+   - *Issue*: Badges displaying categories or sources were rendered in all lowercase.
+   - *Fix*: Applied CSS `textTransform: 'capitalize'` to badges (`item.fact_type`, `item.source`, and `topic`), aligning them with the Title Case guideline.
+4. **Missing Unit Tests**:
+   - *Issue*: There was no automated test coverage for the MemoriaTab component.
+   - *Fix*: Created [MemoriaTab.test.tsx](file:///C:/Personal/Dev/mnemosyne-dashboard/web/src/components/MemoriaTab.test.tsx) and updated [fixtures.ts](file:///C:/Personal/Dev/mnemosyne-dashboard/web/src/test/fixtures.ts) to verify overview counts, session links, sub-tab trigger button clicks, and table rendering.
