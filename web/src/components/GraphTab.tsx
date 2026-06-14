@@ -1,25 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { fetchJSON, Card, CardContent, Button, Input, Badge } from '@hermes/sdk';
-
-interface Node {
-  id: string;
-  label: string;
-  count?: number;
-  x?: number;
-  y?: number;
-}
-
-interface Edge {
-  id: string;
-  source: string;
-  target: string;
-  predicate: string;
-  subject: string;
-  object: string;
-  confidence?: number;
-  created_at?: string;
-  valid_from?: string;
-}
+import { fetchJSON, Card, CardContent, Button, Input, Badge, Tabs, TabsList, TabsTrigger } from '@hermes/sdk';
+import { t } from '@/utils/i18n';
+import { safeNumber } from '@/utils/format';
+import { Node, Edge, API_BASE } from '@/types';
 
 interface GraphData {
   nodes: Node[];
@@ -41,7 +24,6 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
   
   // Graph Panel State
   const [graphQuery, setGraphQuery] = useState('');
-  const [graphData, setGraphData] = useState<GraphData>({ nodes: [], edges: [] });
   const [processedNodes, setProcessedNodes] = useState<Node[]>([]);
   const [processedEdges, setProcessedEdges] = useState<Edge[]>([]);
   const [loadingGraph, setLoadingGraph] = useState(false);
@@ -54,7 +36,7 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
   const [loadingTriples, setLoadingTriples] = useState(false);
   
   // Modal for raw JSON inspection
-  const [inspectingJson, setInspectingJson] = useState<any | null>(null);
+  const [inspectingJson, setInspectingJson] = useState<object | null>(null);
 
   // Pan / Zoom state for SVG
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -76,34 +58,102 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
     setSelectedEdge(null);
     try {
       const q = encodeURIComponent(queryStr.trim());
-      const data = await fetchJSON(`/api/plugins/mnemosyne-native-dashboard/graph?q=${q}&limit=300`);
+      const data = await fetchJSON(`${API_BASE}/graph?q=${q}&limit=300`);
       
-      // Calculate layout coordinates deterministically
+      // Calculate layout coordinates using a force-directed (Fruchterman-Reingold) simulation
       const w = 1000;
       const h = 650;
       const cx = w / 2;
       const cy = h / 2;
-      const r = 260;
 
       const nodesList: Node[] = (data.nodes || []).slice(0, 160);
-      const mappedNodes = nodesList.map((n: Node, i: number, arr: Node[]) => {
-        const angle = (i / arr.length) * Math.PI * 2;
-        const radiusFactor = 0.65 + ((i % 5) / 10);
-        return {
+      const nodeMap = new Map<string, any>();
+      
+      // Initialize nodes with a spiral pattern to prevent overlays
+      nodesList.forEach((n, idx) => {
+        const angle = idx * 0.15 * Math.PI;
+        const radius = 25 + idx * 2.2;
+        nodeMap.set(n.id, {
           ...n,
-          x: cx + Math.cos(angle) * r * radiusFactor,
-          y: cy + Math.sin(angle) * r * radiusFactor
-        };
+          x: cx + Math.cos(angle) * radius,
+          y: cy + Math.sin(angle) * radius,
+          vx: 0,
+          vy: 0
+        });
       });
-
-      const nodeMap = new Map<string, Node>();
-      mappedNodes.forEach(node => nodeMap.set(node.id, node));
 
       const filteredEdges = (data.edges || []).filter((e: Edge) => 
         nodeMap.has(e.source) && nodeMap.has(e.target)
       ).slice(0, 300);
 
-      setGraphData(data);
+      // Force-directed layout parameters
+      const iterations = 150;
+      const k = Math.sqrt((w * h) / (nodesList.length || 1)) * 0.72; // Optimal spacing distance
+
+      for (let iter = 0; iter < iterations; iter++) {
+        // 1. Repulsive forces (nodes push away from each other)
+        for (let i = 0; i < nodesList.length; i++) {
+          const n1 = nodeMap.get(nodesList[i].id);
+          for (let j = i + 1; j < nodesList.length; j++) {
+            const n2 = nodeMap.get(nodesList[j].id);
+            const dx = n1.x - n2.x;
+            const dy = n1.y - n2.y;
+            const dist = Math.hypot(dx, dy) || 1;
+            if (dist < 320) {
+              const force = (k * k) / dist * 0.45;
+              const fx = (dx / dist) * force;
+              const fy = (dy / dist) * force;
+              n1.vx += fx;
+              n1.vy += fy;
+              n2.vx -= fx;
+              n2.vy -= fy;
+            }
+          }
+        }
+
+        // 2. Attractive forces (connected nodes pull together)
+        for (const edge of filteredEdges) {
+          const n1 = nodeMap.get(edge.source);
+          const n2 = nodeMap.get(edge.target);
+          const dx = n1.x - n2.x;
+          const dy = n1.y - n2.y;
+          const dist = Math.hypot(dx, dy) || 1;
+          const force = (dist * dist) / k * 0.16;
+          const fx = (dx / dist) * force;
+          const fy = (dy / dist) * force;
+          n1.vx -= fx;
+          n1.vy -= fy;
+          n2.vx += fx;
+          n2.vy += fy;
+        }
+
+        // 3. Central gravity + position updates with cooling temperature
+        const temp = 1 - (iter / iterations);
+        for (const n of nodeMap.values()) {
+          const dx = n.x - cx;
+          const dy = n.y - cy;
+          const dist = Math.hypot(dx, dy) || 1;
+          n.vx -= (dx / dist) * 0.08 * k;
+          n.vy -= (dy / dist) * 0.08 * k;
+
+          const vel = Math.hypot(n.vx, n.vy) || 1;
+          const maxDisp = 16 * temp;
+          const disp = Math.min(maxDisp, vel);
+          
+          n.x += (n.vx / vel) * disp;
+          n.y += (n.vy / vel) * disp;
+
+          // Keep nodes inside viewport with some padding
+          n.x = Math.max(35, Math.min(w - 35, n.x));
+          n.y = Math.max(35, Math.min(h - 35, n.y));
+
+          // Reset force accumulators
+          n.vx = 0;
+          n.vy = 0;
+        }
+      }
+
+      const mappedNodes = nodesList.map(n => nodeMap.get(n.id) as Node);
       setProcessedNodes(mappedNodes);
       setProcessedEdges(filteredEdges);
     } catch (err) {
@@ -118,7 +168,7 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
     setLoadingTriples(true);
     try {
       const q = encodeURIComponent(queryStr.trim());
-      const res = await fetchJSON(`/api/plugins/mnemosyne-native-dashboard/triples?q=${q}&limit=200`);
+      const res = await fetchJSON(`${API_BASE}/triples?q=${q}&limit=200`);
       setTriples(res.items || []);
     } catch (err) {
       console.error('Failed to load triples data', err);
@@ -196,7 +246,9 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
       if (svgRef.current) {
         try {
           svgRef.current.releasePointerCapture(e.pointerId);
-        } catch (err) {}
+        } catch (err) {
+          console.debug('Failed to release pointer capture:', err);
+        }
       }
     }
   };
@@ -259,6 +311,28 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
     return processedEdges.filter(e => e.source === nodeId || e.target === nodeId);
   };
 
+  const renderTriplesContent = () => {
+    if (loadingTriples) {
+      return <tr><td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: 'rgba(234,234,234,0.4)' }}>{t('graph.searchingKg')}</td></tr>;
+    }
+    if (triples.length === 0) {
+      return <tr><td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: 'rgba(234,234,234,0.4)' }}>{t('graph.noTriplesMatch')}</td></tr>;
+    }
+    return triples.map(t_item => (
+      <tr key={t_item.id} style={{ borderBottom: '1px solid rgba(234,234,234,0.06)' }}
+        onMouseEnter={ev => (ev.currentTarget.style.background = 'rgba(234,234,234,0.04)')}
+        onMouseLeave={ev => (ev.currentTarget.style.background = '')}>
+        <td style={{ padding: '10px 12px', fontFamily: 'var(--theme-font-mono)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t_item.subject}>{t_item.subject}</td>
+        <td style={{ padding: '10px 12px', fontFamily: 'var(--theme-font-mono)', color: '#f59e0b', fontWeight: 600, maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t_item.predicate}>{t_item.predicate}</td>
+        <td style={{ padding: '10px 12px', fontFamily: 'var(--theme-font-mono)', maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t_item.object}>{t_item.object}</td>
+        <td style={{ padding: '10px 12px', fontFamily: 'var(--theme-font-mono)', textAlign: 'center' }}>{safeNumber(t_item.confidence, 2)}</td>
+        <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+          <Button ghost onClick={() => setInspectingJson(t_item)}>{t('common.details')}</Button>
+        </td>
+      </tr>
+    ));
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Dynamic styles to handle SVG states without style leaks */}
@@ -312,23 +386,18 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
         }
       `}</style>
 
-      {/* Sub-tabs */}
-      <div style={{ display: 'flex', gap: '4px', borderBottom: '1px solid rgba(234,234,234,0.1)', paddingBottom: '0', marginBottom: '16px' }}>
-        {(['graph', 'triples'] as const).map(p => (
-          <button
-            key={p}
-            onClick={() => setActivePanel(p)}
-            style={{
-              padding: '6px 16px', fontSize: '12px', fontWeight: 500, background: 'none', border: 'none',
-              borderBottom: activePanel === p ? '2px solid rgba(234,234,234,0.8)' : '2px solid transparent',
-              cursor: 'pointer', color: activePanel === p ? 'rgba(234,234,234,0.9)' : 'rgba(234,234,234,0.4)',
-              transition: 'color 0.15s, border-color 0.15s',
-            }}
-          >
-            {p === 'graph' ? 'Relationship graph' : 'Facts table'}
-          </button>
-        ))}
-      </div>
+      {/* Sub-tabs using SDK Tabs */}
+      <Tabs defaultValue="graph" className="">
+        {(activeValue: string, setActiveValue: (v: string) => void) => {
+          const currentPanel = activeValue || 'graph';
+          return (
+            <TabsList style={{ marginBottom: '16px', flexWrap: 'wrap', height: 'auto', gap: '2px' }}>
+              <TabsTrigger value="graph" active={currentPanel === 'graph'} onClick={() => { setActiveValue('graph'); setActivePanel('graph'); }}>{t('graph.relationshipGraph')}</TabsTrigger>
+              <TabsTrigger value="triples" active={currentPanel === 'triples'} onClick={() => { setActiveValue('triples'); setActivePanel('triples'); }}>{t('graph.factsTable')}</TabsTrigger>
+            </TabsList>
+          );
+        }}
+      </Tabs>
 
       {activePanel === 'graph' && (
         <div className="space-y-4">
@@ -336,7 +405,7 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '12px 16px', borderRadius: '4px', background: 'rgba(234,234,234,0.04)', border: '1px solid rgba(234,234,234,0.1)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '280px' }}>
               <Input
-                placeholder="Filter graph by entity or predicate..."
+                placeholder={t('graph.filterGraphPlaceholder')}
                 value={graphQuery}
                 onChange={(e: any) => setGraphQuery(e.target.value)}
                 onKeyDown={(e: any) => {
@@ -344,12 +413,12 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
                 }}
                 style={{ flex: 1 }}
               />
-              <Button onClick={() => loadGraphData(graphQuery)}>Refresh graph</Button>
-              <Button ghost onClick={() => { setGraphQuery(''); loadGraphData(''); }}>Clear</Button>
+              <Button onClick={() => loadGraphData(graphQuery)}>{t('graph.refreshGraph')}</Button>
+              <Button ghost onClick={() => { setGraphQuery(''); loadGraphData(''); }}>{t('graph.clear')}</Button>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <Button ghost onClick={handleResetView}>Reset view</Button>
-              <span style={{ fontSize: '11px', color: 'rgba(234,234,234,0.4)' }}>Scroll to zoom · Drag to pan · Click to inspect</span>
+              <Button ghost onClick={handleResetView}>{t('graph.resetView')}</Button>
+              <span style={{ fontSize: '11px', color: 'rgba(234,234,234,0.4)' }}>{t('graph.helpText')}</span>
             </div>
           </div>
 
@@ -359,7 +428,7 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
             <div style={{ border: '1px solid rgba(234,234,234,0.1)', borderRadius: '4px', overflow: 'hidden', background: 'rgba(0,0,0,0.35)', position: 'relative', minHeight: '500px' }}>
               {loadingGraph && (
                 <div style={{ position: 'absolute', inset: 0, background: 'rgba(14,14,14,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10, fontSize: '13px', color: 'rgba(234,234,234,0.5)' }}>
-                  Querying graph repository...
+                  {t('graph.queryingGraph')}
                 </div>
               )}
               
@@ -384,7 +453,7 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
                 <g transform={`translate(${zoomState.x}, ${zoomState.y}) scale(${zoomState.scale})`}>
                   {processedNodes.length === 0 && !loadingGraph && (
                     <text x="500" y="325" textAnchor="middle" fill="#94a3b8" className="text-sm">
-                      No matching triples found. Try adjusting filters.
+                    {t('graph.noTriples')}
                     </text>
                   )}
 
@@ -460,17 +529,17 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
                 <CardContent style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1 }}>
                   <div style={{ paddingBottom: '12px', borderBottom: '1px solid rgba(234,234,234,0.1)' }}>
                     <span style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(234,234,234,0.45)' }}>
-                      Graph inspector
+                      {t('graph.inspectorTitle')}
                     </span>
                   </div>
 
                   {selectedNode && (
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto' }}>
                       <div>
-                        <Badge>Entity Node</Badge>
+                        <Badge>{t('graph.entityNode')}</Badge>
                         <div style={{ fontSize: '16px', fontWeight: 700, fontFamily: 'var(--theme-font-mono)', marginTop: '8px', wordBreak: 'break-all' }}>{selectedNode.label}</div>
                         <div style={{ fontSize: '11px', color: 'rgba(234,234,234,0.45)', marginTop: '4px' }}>
-                          Connected to {getConnectedEdges(selectedNode.id).length} relational fact triples.
+                          {t('graph.connectedCount').replace('{count}', String(getConnectedEdges(selectedNode.id).length))}
                         </div>
                       </div>
 
@@ -479,19 +548,19 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
                           style={{ flex: 1 }}
                           onClick={() => { setTripleQuery(selectedNode.label); setActivePanel('triples'); }}
                         >
-                          Show in Triples
+                          {t('graph.showInTriples')}
                         </Button>
                         <Button
                           ghost
                           style={{ flex: 1 }}
                           onClick={() => onNavigateToTab('memories')}
                         >
-                          Search Memories
+                          {t('graph.searchMemories')}
                         </Button>
                       </div>
 
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '11px', color: 'rgba(234,234,234,0.45)', marginBottom: '8px' }}>Connected Triples:</div>
+                        <div style={{ fontSize: '11px', color: 'rgba(234,234,234,0.45)', marginBottom: '8px' }}>{t('graph.connectedTriples')}</div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '220px', overflowY: 'auto' }}>
                           {getConnectedEdges(selectedNode.id).map(e => (
                             <button
@@ -513,33 +582,33 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
                   {selectedEdge && (
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       <div>
-                        <Badge>Predicate Link</Badge>
+                        <Badge>{t('graph.predicateLink')}</Badge>
                         <div style={{ fontSize: '16px', fontWeight: 700, color: '#f59e0b', fontFamily: 'var(--theme-font-mono)', marginTop: '8px' }}>{selectedEdge.predicate}</div>
                         
                         <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(234,234,234,0.04)', border: '1px solid rgba(234,234,234,0.1)', borderRadius: '4px', fontSize: '11px', fontFamily: 'var(--theme-font-mono)' }}>
                           <div style={{ marginBottom: '8px' }}>
-                            <div style={{ color: 'rgba(234,234,234,0.4)', marginBottom: '2px' }}>Subject:</div>
+                            <div style={{ color: 'rgba(234,234,234,0.4)', marginBottom: '2px' }}>{t('graph.subject')}</div>
                             <div style={{ fontWeight: 600, wordBreak: 'break-all' }}>{selectedEdge.subject}</div>
                           </div>
                           <div style={{ borderTop: '1px solid rgba(234,234,234,0.08)', paddingTop: '8px' }}>
-                            <div style={{ color: 'rgba(234,234,234,0.4)', marginBottom: '2px' }}>Object:</div>
+                            <div style={{ color: 'rgba(234,234,234,0.4)', marginBottom: '2px' }}>{t('graph.object')}</div>
                             <div style={{ fontWeight: 600, wordBreak: 'break-all' }}>{selectedEdge.object}</div>
                           </div>
                         </div>
 
                         <div style={{ fontSize: '11px', color: 'rgba(234,234,234,0.45)', marginTop: '8px' }}>
-                          Confidence: {selectedEdge.confidence != null ? selectedEdge.confidence.toFixed(2) : 'n/a'}
+                          {t('graph.confidence')} {safeNumber(selectedEdge.confidence, 2)}
                         </div>
                         {selectedEdge.created_at && (
                           <div style={{ fontSize: '11px', color: 'rgba(234,234,234,0.4)', fontFamily: 'var(--theme-font-mono)', marginTop: '4px' }}>
-                            Recorded: {new Date(selectedEdge.created_at).toLocaleString()}
+                            {t('graph.recorded')} {new Date(selectedEdge.created_at).toLocaleString()}
                           </div>
                         )}
                       </div>
 
                       <div style={{ display: 'flex', gap: '8px' }}>
-                        <Button style={{ flex: 1 }} onClick={() => setInspectingJson(selectedEdge)}>Inspect JSON</Button>
-                        <Button ghost style={{ flex: 1 }} onClick={() => { setTripleQuery(`${selectedEdge.subject} ${selectedEdge.predicate} ${selectedEdge.object}`); setActivePanel('triples'); }}>Show in Triples</Button>
+                        <Button style={{ flex: 1 }} onClick={() => setInspectingJson(selectedEdge)}>{t('graph.inspectJson')}</Button>
+                        <Button ghost style={{ flex: 1 }} onClick={() => { setTripleQuery(`${selectedEdge.subject} ${selectedEdge.predicate} ${selectedEdge.object}`); setActivePanel('triples'); }}>{t('graph.showInTriples')}</Button>
                       </div>
                     </div>
                   )}
@@ -547,7 +616,7 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
                   {!selectedNode && !selectedEdge && (
                     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', border: '1px dashed rgba(234,234,234,0.15)', borderRadius: '4px', textAlign: 'center' }}>
                       <p style={{ fontSize: '12px', color: 'rgba(234,234,234,0.4)' }}>
-                        Pick a node or edge to inspect connected triples, then jump into the Triples table.
+                        {t('graph.pickNodePrompt')}
                       </p>
                     </div>
                   )}
@@ -563,13 +632,13 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
           {/* Triples Toolbar */}
           <div style={{ display: 'flex', gap: '8px', maxWidth: '600px' }}>
             <Input
-              placeholder="Search subject / predicate / object..."
+              placeholder={t('graph.searchTriplesPlaceholder')}
               value={tripleQuery}
               onChange={(e: any) => setTripleQuery(e.target.value)}
               onKeyDown={(e: any) => { if (e.key === 'Enter') loadTriplesData(tripleQuery); }}
               style={{ flex: 1 }}
             />
-            <Button onClick={() => loadTriplesData(tripleQuery)}>Search</Button>
+            <Button onClick={() => loadTriplesData(tripleQuery)}>{t('graph.search')}</Button>
           </div>
 
           {/* Triples Table */}
@@ -584,25 +653,7 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
                   </tr>
                 </thead>
                 <tbody>
-                  {loadingTriples ? (
-                    <tr><td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: 'rgba(234,234,234,0.4)' }}>Searching KG facts database...</td></tr>
-                  ) : triples.length === 0 ? (
-                    <tr><td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: 'rgba(234,234,234,0.4)' }}>No triples matched search query.</td></tr>
-                  ) : (
-                    triples.map(t => (
-                      <tr key={t.id} style={{ borderBottom: '1px solid rgba(234,234,234,0.06)' }}
-                        onMouseEnter={ev => (ev.currentTarget.style.background = 'rgba(234,234,234,0.04)')}
-                        onMouseLeave={ev => (ev.currentTarget.style.background = '')}>
-                        <td style={{ padding: '10px 12px', fontFamily: 'var(--theme-font-mono)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t.subject}>{t.subject}</td>
-                        <td style={{ padding: '10px 12px', fontFamily: 'var(--theme-font-mono)', color: '#f59e0b', fontWeight: 600, maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t.predicate}>{t.predicate}</td>
-                        <td style={{ padding: '10px 12px', fontFamily: 'var(--theme-font-mono)', maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t.object}>{t.object}</td>
-                        <td style={{ padding: '10px 12px', fontFamily: 'var(--theme-font-mono)', textAlign: 'center' }}>{t.confidence != null ? t.confidence.toFixed(2) : 'n/a'}</td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                          <Button ghost onClick={() => setInspectingJson(t)}>Details</Button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
+                  {renderTriplesContent()}
                 </tbody>
               </table>
             </div>
@@ -616,14 +667,14 @@ export const GraphTab: React.FC<GraphTabProps> = ({ onInspectMemory, onNavigateT
           <Card style={{ width: '100%', maxWidth: '680px' }}>
             <CardContent>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '12px', borderBottom: '1px solid rgba(234,234,234,0.1)', marginBottom: '12px' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600 }}>Relational Fact Details</span>
+                <span style={{ fontSize: '13px', fontWeight: 600 }}>{t('graph.relationalFactDetails')}</span>
                 <button onClick={() => setInspectingJson(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(234,234,234,0.5)', fontSize: '16px', lineHeight: 1 }}>✕</button>
               </div>
               <pre style={{ padding: '12px', borderRadius: '4px', background: 'rgba(234,234,234,0.04)', fontSize: '11px', overflowX: 'auto', maxHeight: '400px', fontFamily: 'var(--theme-font-mono)', color: 'rgba(234,234,234,0.7)', lineHeight: 1.6 }}>
                 {JSON.stringify(inspectingJson, null, 2)}
               </pre>
               <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '12px' }}>
-                <Button onClick={() => setInspectingJson(null)}>Close</Button>
+                <Button onClick={() => setInspectingJson(null)}>{t('common.close')}</Button>
               </div>
             </CardContent>
           </Card>

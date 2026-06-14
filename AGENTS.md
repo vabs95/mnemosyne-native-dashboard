@@ -1,12 +1,24 @@
-## graphify
+# Mnemosyne Native Dashboard — Agent Rules
 
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+This file contains guidelines specifically for AI coding assistants working on this repository.
 
-When the user types `/graphify`, invoke the `skill` tool with `skill: "graphify"` before doing anything else.
+## 1. Graphify Knowledge Graph
+This project maintains an AST-based knowledge graph in `graphify-out/`.
+*   **Codebase Queries**: Before reading files or using grep, run `graphify query "<question>"` to obtain a scoped subgraph. Use `graphify path` for relationships and `graphify explain` for concepts.
+*   **Graph Sync**: After modifying any files, always run `graphify update .` to keep the AST current.
 
-Rules:
-- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
-- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
-- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
-- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+## 2. Safety Guidelines
+*   **Read-Only Default**: The dashboard UI must remain read-only by default. Mutation actions (supersede, expire, invalidate) must be hidden unless `adminMode === true` is passed.
+*   **SDK Focus**: Prefer Out-Of-The-Box components from `@hermes/sdk` over writing custom HTML, CSS, or JS layouts.
+
+## 3. Design & Domain References
+*   Refer to [DESIGN.md](file:///C:/Personal/Dev/mnemosyne-dashboard/DESIGN.md) for UI styling, row hovers, colors, and coding standards.
+*   Refer to [AI.md](file:///C:/Personal/Dev/mnemosyne-dashboard/AI.md) for the BEAM memory model architecture.
+
+## 4. Verification Check
+Run these checks before ending your turn:
+1.  `cd web && npm run typecheck`
+2.  `cd web && npm run lint`
+3.  `cd web && npm run build`
+4.  `python -m pytest -q`
+5.  `graphify update .`

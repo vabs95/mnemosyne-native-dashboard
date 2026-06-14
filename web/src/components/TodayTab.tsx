@@ -1,38 +1,49 @@
 import React, { useState, useEffect } from 'react';
-import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, Button, Input } from '@hermes/sdk';
+import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, Button, Input, Tabs, TabsList, TabsTrigger } from '@hermes/sdk';
+import { formatDateTimeLabel, safeNumber, shortId } from '@/utils/format';
+import { t } from '@/utils/i18n';
+import { MemoryItem, TripleItem, ConsolidationItem, API_BASE as API } from '@/types';
 
-const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
+const VERACITY_COLOR: Record<string, string> = {
+  stated: '#065f46',
+  inferred: '#1e3a8a',
+  tool: '#581c87',
+  imported: '#78350f',
+};
 
 interface DigestData {
   day: string;
   counts: {
     memories_added: number;
-    memories_recalled?: number;
-    contaminated_added?: number;
-    degraded_added?: number;
+    memories_recalled: number;
+    contaminated_added: number;
+    degraded_added: number;
     triples_added: number;
     consolidations: number;
   };
-  memories_added: any[];
-  triples_added: any[];
-  consolidations: any[];
+  memories_added: MemoryItem[];
+  memories_recalled: MemoryItem[];
+  triples_added: TripleItem[];
+  consolidations: ConsolidationItem[];
   breakdowns?: {
     sources?: Array<{ label: string; count: number }>;
     sessions?: Array<{ label: string; count: number }>;
     veracity?: Array<{ label: string; count: number }>;
+    degradation?: Array<{ label: string; count: number }>;
     entities?: Array<{ label: string; count: number }>;
   };
 }
 
-/**
- * TodayTab Component
- * Renders a daily digest for the selected date.
- */
-export const TodayTab: React.FC = () => {
+export const TodayTab: React.FC<{
+  onInspectMemory: (memory: any) => void;
+  onInspectSession: (id: string) => void;
+  onInspectJson: (data: any, title?: string) => void;
+}> = ({ onInspectMemory, onInspectSession, onInspectJson }) => {
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [digest, setDigest] = useState<DigestData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeSubPanel, setActiveSubPanel] = useState<'added' | 'recalled' | 'triples' | 'consolidations'>('added');
 
   useEffect(() => {
     setLoading(true);
@@ -44,12 +55,13 @@ export const TodayTab: React.FC = () => {
 
   const resetToday = () => setDate(new Date().toISOString().split('T')[0]);
 
-  const breakdownsList: Array<[string, Array<{ label: string; count: number }> | undefined]> = digest?.breakdowns
+  const breakdownsList = digest?.breakdowns
     ? [
-        ['Sources', digest.breakdowns.sources],
-        ['Sessions', digest.breakdowns.sessions],
-        ['Veracity', digest.breakdowns.veracity],
-        ['Entities', digest.breakdowns.entities],
+        { key: 'entities', label: t('today.topEntities'), rows: digest.breakdowns.entities },
+        { key: 'veracity', label: t('today.trustMix'), rows: digest.breakdowns.veracity },
+        { key: 'lifecycle', label: t('today.lifecycle'), rows: digest.breakdowns.degradation },
+        { key: 'sources', label: t('today.sources'), rows: digest.breakdowns.sources },
+        { key: 'sessions', label: t('today.sessions'), rows: digest.breakdowns.sessions },
       ]
     : [];
 
@@ -58,97 +70,112 @@ export const TodayTab: React.FC = () => {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: '16px', borderBottom: `1px solid ${MG(0.1)}` }}>
         <div>
-          <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px' }}>Today in Memory</div>
-          <div style={{ fontSize: '12px', color: MG(0.45) }}>Daily digest of additions, consolidations, and triples</div>
+          <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px' }}>{t('today.subtitle')}</div>
+          <div style={{ fontSize: '12px', color: MG(0.45) }}>{t('today.digest')}</div>
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <Input type="date" value={date} onChange={(e: any) => setDate(e.target.value)} style={{ width: '160px' }} />
-          <Button onClick={resetToday} ghost>Today</Button>
+          <Button onClick={resetToday} ghost>{t('today.todayBtn')}</Button>
         </div>
       </div>
 
       {loading ? (
-        <div style={{ textAlign: 'center', color: MG(0.4), padding: '40px' }}>Loading daily digest...</div>
+        <div style={{ textAlign: 'center', color: MG(0.4), padding: '40px' }}>{t('today.loadingDigest')}</div>
       ) : (
         <>
           {/* Metric cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '10px' }}>
             {[
-              { label: 'Memories Added', value: digest?.counts.memories_added ?? 0 },
-              { label: 'Triples Added', value: digest?.counts.triples_added ?? 0 },
-              { label: 'Consolidations', value: digest?.counts.consolidations ?? 0 },
+              { label: t('today.added'), value: digest?.counts.memories_added ?? 0 },
+              { label: t('today.recalled'), value: digest?.counts.memories_recalled ?? 0 },
+              { label: t('today.needsReview'), value: digest?.counts.contaminated_added ?? 0 },
+              { label: t('today.lifecycleChanges'), value: digest?.counts.degraded_added ?? 0 },
+              { label: t('today.triples'), value: digest?.counts.triples_added ?? 0 },
+              { label: t('today.consolidations'), value: digest?.counts.consolidations ?? 0 },
             ].map(c => (
               <Card key={c.label}>
-                <CardContent>
-                  <div style={{ textAlign: 'center', padding: '8px 0' }}>
-                    <div style={{ fontSize: '11px', color: MG(0.45), textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>{c.label}</div>
-                    <div style={{ fontSize: '32px', fontWeight: 700 }}>{c.value}</div>
+                <CardContent style={{ padding: '10px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '9px', color: MG(0.45), textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={c.label}>
+                    {c.label}
                   </div>
+                  <div style={{ fontSize: '20px', fontWeight: 700, marginTop: '4px' }}>{c.value.toLocaleString()}</div>
                 </CardContent>
               </Card>
             ))}
           </div>
 
-          {/* Memories logged */}
-          <Card>
-            <CardHeader><CardTitle>Memories Logged</CardTitle></CardHeader>
-            <CardContent>
-              {digest?.memories_added && digest.memories_added.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {digest.memories_added.map((m: any) => (
-                    <div
-                      key={m.id}
-                      style={{
-                        padding: '10px 12px', borderRadius: '4px',
-                        background: MG(0.03), border: `1px solid ${MG(0.07)}`,
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px',
-                      }}
-                    >
-                      <span style={{ fontSize: '13px', flex: 1 }}>{m.content}</span>
-                      <Badge>{m.veracity}</Badge>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{ color: MG(0.35), fontSize: '12px', textAlign: 'center', padding: '20px' }}>No memories recorded on this date.</div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Triples logged */}
-          {digest?.triples_added && digest.triples_added.length > 0 && (
-            <Card>
-              <CardHeader><CardTitle>Triples Extracted</CardTitle></CardHeader>
-              <CardContent>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {digest.triples_added.map((t: any, i: number) => (
-                    <div key={t.id || i} style={{ padding: '8px 12px', fontSize: '12px', fontFamily: 'var(--theme-font-mono)', background: MG(0.03), borderRadius: '4px', border: `1px solid ${MG(0.07)}` }}>
-                      <span style={{ color: MG(0.75) }}>{t.subject}</span>{' '}
-                      <span style={{ color: MG(0.4) }}>{t.predicate}</span>{' '}
-                      <span style={{ color: MG(0.75) }}>{t.object}</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
+          {/* Breakdowns compact view */}
           {digest?.breakdowns && (
             <Card>
-              <CardHeader><CardTitle>Breakdowns</CardTitle></CardHeader>
-              <CardContent>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '16px' }}>
-                  {breakdownsList.map(([label, rows]) => (
-                    <div key={label}>
-                      <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: MG(0.4), marginBottom: '8px' }}>{label}</div>
+              <CardHeader><CardTitle>{t('today.breakdowns')}</CardTitle></CardHeader>
+              <CardContent style={{ padding: '16px 20px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '16px' }}>
+                  {breakdownsList.map(({ key, label, rows }) => (
+                    <div key={key}>
+                      <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: MG(0.45), marginBottom: '8px' }}>{label}</div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        {(rows || []).slice(0, 6).map((row: any) => (
-                          <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '12px' }}>
-                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.label || 'unknown'}</span>
-                            <Badge>{row.count}</Badge>
-                          </div>
-                        ))}
-                        {!(rows || []).length && <div style={{ color: MG(0.35), fontSize: '12px' }}>No data</div>}
+                        {(rows || []).slice(0, 6).map((row: any) => {
+                          if (key === 'sessions') {
+                            return (
+                              <button
+                                key={row.label}
+                                type="button"
+                                onClick={() => onInspectSession(row.label)}
+                                style={{
+                                  display: 'flex',
+                                  width: '100%',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  background: 'rgba(234,234,234,0.02)',
+                                  border: 'none',
+                                  padding: '4px 6px',
+                                  borderRadius: '4px',
+                                  font: 'inherit',
+                                  fontSize: '11px',
+                                  cursor: 'pointer',
+                                  transition: 'background 0.15s',
+                                  color: 'inherit',
+                                  textDecoration: 'underline',
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(234,234,234,0.06)')}
+                                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(234,234,234,0.02)')}
+                              >
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--theme-font-mono)' }} title={row.label || 'unknown'}>
+                                  {shortId(row.label)}
+                                </span>
+                                <strong>{row.count}</strong>
+                              </button>
+                            );
+                          }
+
+                          const shouldCapitalize = ['veracity', 'lifecycle', 'sources'].includes(key);
+                          return (
+                            <div
+                              key={row.label}
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                gap: '8px',
+                                fontSize: '11px',
+                                padding: '4px 6px',
+                              }}
+                            >
+                              <span
+                                style={{
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  textTransform: shouldCapitalize ? 'capitalize' : 'none',
+                                }}
+                                title={row.label || 'unknown'}
+                              >
+                                {row.label || 'unknown'}
+                              </span>
+                              <strong>{row.count}</strong>
+                            </div>
+                          );
+                        })}
+                        {!(rows || []).length && <div style={{ color: MG(0.35), fontSize: '11px', padding: '4px 6px' }}>{t('common.noData')}</div>}
                       </div>
                     </div>
                   ))}
@@ -156,6 +183,214 @@ export const TodayTab: React.FC = () => {
               </CardContent>
             </Card>
           )}
+
+          {/* Subpanels tabs navigation using SDK Tabs */}
+          <Tabs defaultValue="added" className="">
+            {(activeValue: string, setActiveValue: (v: string) => void) => {
+              const currentPanel = activeValue || 'added';
+              return (
+                <TabsList style={{ marginBottom: '8px', flexWrap: 'wrap', height: 'auto', gap: '2px' }}>
+                  <TabsTrigger value="added" active={currentPanel === 'added'} onClick={() => { setActiveValue('added'); setActiveSubPanel('added'); }}>{t('today.added')}</TabsTrigger>
+                  <TabsTrigger value="recalled" active={currentPanel === 'recalled'} onClick={() => { setActiveValue('recalled'); setActiveSubPanel('recalled'); }}>{t('today.recalled')}</TabsTrigger>
+                  <TabsTrigger value="triples" active={currentPanel === 'triples'} onClick={() => { setActiveValue('triples'); setActiveSubPanel('triples'); }}>{t('today.triples')}</TabsTrigger>
+                  <TabsTrigger value="consolidations" active={currentPanel === 'consolidations'} onClick={() => { setActiveValue('consolidations'); setActiveSubPanel('consolidations'); }}>{t('today.consolidations')}</TabsTrigger>
+                </TabsList>
+              );
+            }}
+          </Tabs>
+
+          {/* Subpanel lists */}
+          <div>
+            {/* Added list */}
+            {activeSubPanel === 'added' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {digest?.memories_added && digest.memories_added.length > 0 ? (
+                  digest.memories_added.map(m => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => onInspectMemory(m)}
+                      style={{
+                        display: 'flex',
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '10px 12px', borderRadius: '4px', cursor: 'pointer',
+                        background: MG(0.03), border: `1px solid ${MG(0.07)}`,
+                        justifyContent: 'space-between', alignItems: 'center', gap: '12px',
+                        transition: 'background 0.15s',
+                        font: 'inherit',
+                        color: 'inherit',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = MG(0.07))}
+                      onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                        <span style={{ fontSize: '13px' }}>{m.content}</span>
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '4px', alignItems: 'center' }}>
+                          <Badge style={{ background: VERACITY_COLOR[String(m.veracity).toLowerCase()] || MG(0.1) }}>{m.veracity}</Badge>
+                          {m.session_id && (
+                            <button
+                              type="button"
+                              onClick={e => { e.stopPropagation(); onInspectSession(m.session_id!); }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: 0,
+                                font: 'inherit',
+                                fontSize: '10px',
+                                fontFamily: 'var(--theme-font-mono)',
+                                color: MG(0.5),
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                              }}
+                            >
+                              session:{shortId(m.session_id)}
+                            </button>
+                          )}
+                          <span style={{ fontSize: '10px', color: MG(0.4) }}>imp:{safeNumber(m.importance, 2)}</span>
+                        </div>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <div style={{ color: MG(0.35), fontSize: '12px', textAlign: 'center', padding: '20px' }}>{t('today.noAdded')}</div>
+                )}
+              </div>
+            )}
+
+            {/* Recalled list */}
+            {activeSubPanel === 'recalled' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {digest?.memories_recalled && digest.memories_recalled.length > 0 ? (
+                  digest.memories_recalled.map(m => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => onInspectMemory(m)}
+                      style={{
+                        display: 'flex',
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '10px 12px', borderRadius: '4px', cursor: 'pointer',
+                        background: MG(0.03), border: `1px solid ${MG(0.07)}`,
+                        justifyContent: 'space-between', alignItems: 'center', gap: '12px',
+                        transition: 'background 0.15s',
+                        font: 'inherit',
+                        color: 'inherit',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = MG(0.07))}
+                      onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                        <span style={{ fontSize: '13px' }}>{m.content}</span>
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '4px', alignItems: 'center' }}>
+                          <Badge style={{ background: VERACITY_COLOR[String(m.veracity).toLowerCase()] || MG(0.1) }}>{m.veracity}</Badge>
+                          {m.session_id && (
+                            <button
+                              type="button"
+                              onClick={e => { e.stopPropagation(); onInspectSession(m.session_id!); }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: 0,
+                                font: 'inherit',
+                                fontSize: '10px',
+                                fontFamily: 'var(--theme-font-mono)',
+                                color: MG(0.5),
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                              }}
+                            >
+                              session:{shortId(m.session_id)}
+                            </button>
+                          )}
+                          <span style={{ fontSize: '10px', color: MG(0.4) }}>imp:{safeNumber(m.importance, 2)}</span>
+                        </div>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <div style={{ color: MG(0.35), fontSize: '12px', textAlign: 'center', padding: '20px' }}>{t('today.noRecalled')}</div>
+                )}
+              </div>
+            )}
+
+            {/* Triples list */}
+            {activeSubPanel === 'triples' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {digest?.triples_added && digest.triples_added.length > 0 ? (
+                  digest.triples_added.map((tItem, idx) => (
+                    <button
+                      key={tItem.id || idx}
+                      type="button"
+                      onClick={() => onInspectJson(tItem, 'Triple detail')}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '10px 12px', borderRadius: '4px', cursor: 'pointer',
+                        background: MG(0.03), border: `1px solid ${MG(0.07)}`,
+                        fontSize: '12px',
+                        transition: 'background 0.15s',
+                        font: 'inherit',
+                        color: 'inherit',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = MG(0.07))}
+                      onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: MG(0.45), marginBottom: '4px' }}>
+                        <span>{t('today.triples').toLowerCase()}</span>
+                        <span>{formatDateTimeLabel(tItem.created_at || tItem.valid_from)}</span>
+                      </div>
+                      <div>
+                        <strong>{tItem.subject}</strong> — {tItem.predicate} → <strong>{tItem.object}</strong>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <div style={{ color: MG(0.35), fontSize: '12px', textAlign: 'center', padding: '20px' }}>{t('today.noTriples')}</div>
+                )}
+              </div>
+            )}
+
+            {/* Consolidations list */}
+            {activeSubPanel === 'consolidations' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {digest?.consolidations && digest.consolidations.length > 0 ? (
+                  digest.consolidations.map((cItem, idx) => (
+                    <button
+                      key={cItem.id || idx}
+                      type="button"
+                      onClick={() => onInspectJson(cItem, 'Consolidation detail')}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '10px 12px', borderRadius: '4px', cursor: 'pointer',
+                        background: MG(0.03), border: `1px solid ${MG(0.07)}`,
+                        fontSize: '12px',
+                        transition: 'background 0.15s',
+                        font: 'inherit',
+                        color: 'inherit',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = MG(0.07))}
+                      onMouseLeave={e => (e.currentTarget.style.background = MG(0.03))}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: MG(0.45), marginBottom: '4px' }}>
+                        <span>{t('today.consolidations').toLowerCase()} · {cItem.items_consolidated} {t('contextBank.items')}</span>
+                        <span>{formatDateTimeLabel(cItem.created_at)}</span>
+                      </div>
+                      <div>
+                        <strong style={{ fontFamily: 'var(--theme-font-mono)' }}>{cItem.session_id}</strong>: {cItem.summary_preview}
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <div style={{ color: MG(0.35), fontSize: '12px', textAlign: 'center', padding: '20px' }}>{t('today.noConsolidations')}</div>
+                )}
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>

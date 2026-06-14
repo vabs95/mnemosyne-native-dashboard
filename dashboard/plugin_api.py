@@ -6,6 +6,7 @@ mapping data from the local SQLite database via dashboard_core.py.
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
 from pathlib import Path
@@ -91,6 +92,18 @@ class SupersedeMemoryModel(BaseModel):
 # --- READ API Routes ---
 
 
+def _get_version() -> str:
+    """Read version from manifest.json."""
+    try:
+        manifest_path = Path(__file__).resolve().parent / "manifest.json"
+        if manifest_path.exists():
+            with open(manifest_path, encoding="utf-8") as f:
+                return json.load(f).get("version", "0.1.0")
+    except Exception:
+        pass
+    return "0.1.0"
+
+
 @router.get("/health")
 async def get_health():
     """Retrieve service health status, diagnostics state, and active configuration."""
@@ -101,6 +114,7 @@ async def get_health():
             "service": "mnemosyne-native-dashboard",
             "read_only": not cfg.memory_admin_enabled,
             "config": public_config(cfg),
+            "version": _get_version(),
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -110,7 +124,11 @@ async def get_health():
 async def get_plugin_config():
     """Fetch the active configuration fields."""
     try:
-        return {"ok": True, "config": public_config(load_config(create=True))}
+        return {
+            "ok": True,
+            "config": public_config(load_config(create=True)),
+            "version": _get_version(),
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 

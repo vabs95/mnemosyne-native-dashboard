@@ -1,53 +1,74 @@
 import React, { useState, useEffect } from 'react';
 import { fetchJSON, Card, CardHeader, CardTitle, CardContent, Badge, Button, Input, Select, SelectOption } from '@hermes/sdk';
-import { formatDateLabel, safeNumber } from '../utils/format';
+import { formatDateLabel, safeNumber, shortId } from '@/utils/format';
+import { t } from '@/utils/i18n';
+import { MemoryItem, API_BASE as API } from '@/types';
 
-const API = '/api/plugins/mnemosyne-native-dashboard';
 const MG = (o: number) => `rgba(234,234,234,${o})`;
 
-interface MemoryItem {
-  id: string;
-  content: string;
-  importance: number;
-  veracity: string;
-  source: string;
-  scope: string;
-  status: string;
-  created_at: string;
-  session_id?: string;
-  valid_until?: string;
+interface StatsData {
+  by_source?: Array<{ source: string; count: number }>;
+  by_scope?: Array<{ scope: string; count: number }>;
+  by_session?: Array<{ session_id: string; count: number }>;
 }
 
 interface MemoriesTabProps {
-  onInspectMemory: (id: string) => void;
+  onInspectMemory: (memory: any) => void;
+  onInspectSession: (id: string) => void;
   adminMode: boolean;
+  filters: any;
+  setFilters: React.Dispatch<React.SetStateAction<any>>;
 }
 
-/**
- * MemoriesTab Component
- * Renders the main Memory Browser with filters, paged list, detail inspector,
- * and optional admin actions (supersede, expire, veracity, invalidate).
- */
-export const MemoriesTab: React.FC<MemoriesTabProps> = ({ onInspectMemory, adminMode }) => {
+export const MemoriesTab: React.FC<MemoriesTabProps> = ({ onInspectMemory, onInspectSession, adminMode, filters, setFilters }) => {
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<MemoryItem | null>(null);
 
-  const [q, setQ] = useState('');
-  const [kind, setKind] = useState('all');
-  const [status, setStatus] = useState('active');
-  const [sort, setSort] = useState('recent');
+  // Lists for dropdown options (fetched from stats)
+  const [statsData, setStatsData] = useState<StatsData | null>(null);
 
   const [supersedeText, setSupersedeText] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => { loadMemories(); }, [q, kind, status, sort]);
+  // Load dropdown lists on mount
+  useEffect(() => {
+    fetchJSON(`${API}/stats`)
+      .then(res => setStatsData(res))
+      .catch(console.error);
+  }, []);
+
+  // Fetch memories when filters change
+  useEffect(() => {
+    loadMemories();
+  }, [filters]);
 
   async function loadMemories() {
     setLoading(true);
     try {
-      const qs = new URLSearchParams({ kind, q, status, sort, limit: '50' }).toString();
+      const queryParams: any = {
+        kind: filters.kind || 'all',
+        q: (filters.q || '').trim(),
+        status: filters.status || 'active',
+        sort: filters.sort || 'recent',
+        source: filters.source || '',
+        scope: filters.scope || '',
+        session_id: filters.session_id || '',
+        veracity: filters.veracity || '',
+        degradation_tier: filters.degradation_tier || '',
+        contaminated_only: filters.trust_preset === 'contaminated' ? '1' : '',
+        degraded_only: filters.trust_preset === 'degraded' ? '1' : '',
+        due_for_degradation: filters.trust_preset === 'due' ? '1' : '',
+        limit: '150',
+      };
+
+      // Clean up empty parameters
+      Object.keys(queryParams).forEach(k => {
+        if (queryParams[k] === '') delete queryParams[k];
+      });
+
+      const qs = new URLSearchParams(queryParams).toString();
       const res = await fetchJSON(`${API}/memories?${qs}`);
       const items = res.items || [];
       setMemories(items);
@@ -58,20 +79,39 @@ export const MemoriesTab: React.FC<MemoriesTabProps> = ({ onInspectMemory, admin
     }
   }
 
+  const handleFilterChange = (key: string, value: string) => {
+    setFilters((prev: any) => ({ ...prev, [key]: value }));
+  };
+
+  const handleClearFilters = () => {
+    setFilters({
+      q: '',
+      kind: 'all',
+      status: 'active',
+      sort: 'recent',
+      source: '',
+      scope: '',
+      session_id: '',
+      veracity: '',
+      degradation_tier: '',
+      trust_preset: '',
+    });
+  };
+
   async function adminAction(url: string, body: object) {
     setSubmitting(true);
     try {
       await fetchJSON(url, { method: 'POST', body: JSON.stringify(body) });
       loadMemories();
     } catch (err: any) {
-      alert(err.message || 'Operation failed');
+      alert(err.message || t('review.operationFailed'));
     } finally {
       setSubmitting(false);
     }
   }
 
   const handleInvalidate = (id: string) => {
-    if (confirm('Invalidate this memory?')) adminAction(`${API}/admin/memory/invalidate`, { memory_id: id, backup: true });
+    if (confirm(t('memories.confirmInvalidate'))) adminAction(`${API}/admin/memory/invalidate`, { memory_id: id, backup: true });
   };
   const handleSupersede = (id: string) => {
     if (supersedeText.trim()) adminAction(`${API}/admin/memory/supersede`, { memory_id: id, content: supersedeText, backup: true });
@@ -79,39 +119,178 @@ export const MemoriesTab: React.FC<MemoriesTabProps> = ({ onInspectMemory, admin
   const handleSetExpiry = (id: string) => adminAction(`${API}/admin/memory/expiry`, { memory_id: id, valid_until: expiryDate, backup: true });
   const handleSetVeracity = (id: string, v: string) => adminAction(`${API}/admin/memory/veracity`, { memory_id: id, veracity: v, backup: true });
 
+  const renderMemoriesListContent = () => {
+    if (loading) {
+      return <div style={{ textAlign: 'center', padding: '40px', color: MG(0.4) }}>{t('memories.loadingList')}</div>;
+    }
+    if (memories.length === 0) {
+      return <div style={{ textAlign: 'center', padding: '20px', color: MG(0.35), fontSize: '12px' }}>{t('memories.noMatching')}</div>;
+    }
+    return memories.map(m => (
+      <div
+        key={m.id}
+        role="button"
+        tabIndex={0}
+        onClick={() => setSelected(m)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setSelected(m);
+          }
+        }}
+        style={{
+          display: 'block',
+          width: '100%',
+          textAlign: 'left',
+          padding: '10px 12px', borderRadius: '4px', cursor: 'pointer',
+          background: selected?.id === m.id ? MG(0.08) : MG(0.03),
+          border: `1px solid ${selected?.id === m.id ? MG(0.2) : MG(0.07)}`,
+          transition: 'background 0.15s',
+          font: 'inherit',
+          color: 'inherit',
+        }}
+        onMouseEnter={e => { if (selected?.id !== m.id) e.currentTarget.style.background = MG(0.06); }}
+        onMouseLeave={e => { if (selected?.id !== m.id) e.currentTarget.style.background = MG(0.03); }}
+      >
+        <div style={{ fontSize: '12px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', marginBottom: '6px' }}>{m.content}</div>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <Badge>{m.veracity}</Badge>
+          <span style={{ fontSize: '10px', fontFamily: 'var(--theme-font-mono)', color: MG(0.4) }}>{t('review.impLabel')}{safeNumber(m.importance, 2, 'n/a')}</span>
+          {m.scope && <span style={{ fontSize: '10px', fontFamily: 'var(--theme-font-mono)', color: MG(0.4), textTransform: 'capitalize' }}>{m.scope}</span>}
+          {m.session_id && (
+            <button
+              type="button"
+              onClick={e => { e.stopPropagation(); onInspectSession(m.session_id!); }}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                font: 'inherit',
+                fontSize: '10px',
+                fontFamily: 'var(--theme-font-mono)',
+                color: MG(0.6),
+                cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
+            >
+              {t('review.sessionLabel')}{shortId(m.session_id)}
+            </button>
+          )}
+        </div>
+      </div>
+    ));
+  };
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: '16px', alignItems: 'start' }}>
       {/* Left: Filters + List */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {/* Filters */}
+        {/* Expanded Filters */}
         <Card>
-          <CardContent>
+          <CardContent style={{ padding: '16px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <Input
-                  placeholder="Search memories..."
-                  value={q}
-                  onChange={(e: any) => setQ(e.target.value)}
+                  placeholder={t('memories.searchPlaceholder')}
+                  value={filters.q || ''}
+                  onChange={(e: any) => handleFilterChange('q', e.target.value)}
                   style={{ flex: 1 }}
                 />
-                <Button onClick={loadMemories} ghost>Refresh</Button>
+                <Button onClick={loadMemories} ghost>{t('memories.refresh')}</Button>
+                <Button onClick={handleClearFilters} ghost>{t('memories.clear')}</Button>
               </div>
+
+              {/* Advanced filter dropdowns */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>{t('memories.kind')}</span>
+                  <Select value={filters.kind || 'all'} onValueChange={(val: string) => handleFilterChange('kind', val)}>
+                    <SelectOption value="all">{t('memories.allTiers')}</SelectOption>
+                    <SelectOption value="working">{t('memories.working')}</SelectOption>
+                    <SelectOption value="episodic">{t('memories.episodic')}</SelectOption>
+                  </Select>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>{t('memories.status')}</span>
+                  <Select value={filters.status || 'active'} onValueChange={(val: string) => handleFilterChange('status', val)}>
+                    <SelectOption value="active">{t('memories.activeOnly')}</SelectOption>
+                    <SelectOption value="expired">{t('memories.expiredOnly')}</SelectOption>
+                    <SelectOption value="all">{t('memories.allStatuses')}</SelectOption>
+                  </Select>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>{t('memories.sort')}</span>
+                  <Select value={filters.sort || 'recent'} onValueChange={(val: string) => handleFilterChange('sort', val)}>
+                    <SelectOption value="recent">{t('memories.recent')}</SelectOption>
+                    <SelectOption value="importance">{t('memories.importance')}</SelectOption>
+                    <SelectOption value="oldest">{t('memories.oldest')}</SelectOption>
+                  </Select>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>{t('memories.trustPreset')}</span>
+                  <Select value={filters.trust_preset || ''} onValueChange={(val: string) => handleFilterChange('trust_preset', val)}>
+                    <SelectOption value="">{t('memories.allConfidence')}</SelectOption>
+                    <SelectOption value="contaminated">{t('memories.contaminated')}</SelectOption>
+                    <SelectOption value="degraded">{t('memories.degradedOnly')}</SelectOption>
+                    <SelectOption value="due">{t('memories.due')}</SelectOption>
+                  </Select>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>{t('memories.veracity')}</span>
+                  <Select value={filters.veracity || ''} onValueChange={(val: string) => handleFilterChange('veracity', val)}>
+                    <SelectOption value="">{t('memories.allTrust')}</SelectOption>
+                    <SelectOption value="stated">{t('common.stated')}</SelectOption>
+                    <SelectOption value="inferred">{t('common.inferred')}</SelectOption>
+                    <SelectOption value="tool">{t('common.tool')}</SelectOption>
+                    <SelectOption value="imported">{t('common.imported')}</SelectOption>
+                    <SelectOption value="unknown">{t('common.unknown')}</SelectOption>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Dynamic list selects (Source, Scope, Session) */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                <Select value={kind} onValueChange={setKind}>
-                  <SelectOption value="all">All Tiers</SelectOption>
-                  <SelectOption value="working">Working</SelectOption>
-                  <SelectOption value="episodic">Episodic</SelectOption>
-                </Select>
-                <Select value={status} onValueChange={setStatus}>
-                  <SelectOption value="active">Active Only</SelectOption>
-                  <SelectOption value="expired">Expired Only</SelectOption>
-                  <SelectOption value="all">All Statuses</SelectOption>
-                </Select>
-                <Select value={sort} onValueChange={setSort}>
-                  <SelectOption value="recent">Recent</SelectOption>
-                  <SelectOption value="importance">Highest Importance</SelectOption>
-                  <SelectOption value="oldest">Oldest</SelectOption>
-                </Select>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>{t('memories.source')}</span>
+                  <Select value={filters.source || ''} onValueChange={(val: string) => handleFilterChange('source', val)}>
+                    <SelectOption value="">{t('memories.allSources')}</SelectOption>
+                    {(statsData?.by_source || []).map(s => {
+                      const text = s.source || t('common.unknown');
+                      const display = text.charAt(0).toUpperCase() + text.slice(1);
+                      return (
+                        <SelectOption key={s.source} value={s.source}>{display}</SelectOption>
+                      );
+                    })}
+                  </Select>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>{t('memories.scope')}</span>
+                  <Select value={filters.scope || ''} onValueChange={(val: string) => handleFilterChange('scope', val)}>
+                    <SelectOption value="">{t('memories.allScopes')}</SelectOption>
+                    {(statsData?.by_scope || []).map(s => {
+                      const text = s.scope || t('common.unknown');
+                      const display = text.charAt(0).toUpperCase() + text.slice(1);
+                      return (
+                        <SelectOption key={s.scope} value={s.scope}>{display}</SelectOption>
+                      );
+                    })}
+                  </Select>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span style={{ fontSize: '9px', color: MG(0.4), textTransform: 'uppercase' }}>{t('memories.session')}</span>
+                  <Select value={filters.session_id || ''} onValueChange={(val: string) => handleFilterChange('session_id', val)}>
+                    <SelectOption value="">{t('memories.allSessions')}</SelectOption>
+                    {(statsData?.by_session || []).map(s => (
+                      <SelectOption key={s.session_id} value={s.session_id}>{shortId(s.session_id)}</SelectOption>
+                    ))}
+                  </Select>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -119,145 +298,113 @@ export const MemoriesTab: React.FC<MemoriesTabProps> = ({ onInspectMemory, admin
 
         {/* Memory list */}
         <div style={{ maxHeight: '600px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: MG(0.4) }}>Loading memory list...</div>
-          ) : memories.length > 0 ? (
-            memories.map(m => (
-              <div
-                key={m.id}
-                onClick={() => setSelected(m)}
-                style={{
-                  padding: '10px 12px', borderRadius: '4px', cursor: 'pointer',
-                  background: selected?.id === m.id ? MG(0.08) : MG(0.03),
-                  border: `1px solid ${selected?.id === m.id ? MG(0.2) : MG(0.07)}`,
-                  transition: 'background 0.1s',
-                }}
-                onMouseEnter={e => { if (selected?.id !== m.id) e.currentTarget.style.background = MG(0.06); }}
-                onMouseLeave={e => { if (selected?.id !== m.id) e.currentTarget.style.background = MG(0.03); }}
-              >
-                <div style={{ fontSize: '12px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', marginBottom: '6px' }}>{m.content}</div>
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <Badge>{m.veracity}</Badge>
-                  <span style={{ fontSize: '10px', fontFamily: 'var(--theme-font-mono)', color: MG(0.4) }}>imp:{safeNumber(m.importance, 2, 'n/a')}</span>
-                  {m.scope && <span style={{ fontSize: '10px', fontFamily: 'var(--theme-font-mono)', color: MG(0.4) }}>{m.scope}</span>}
-                </div>
-              </div>
-            ))
-          ) : (
-            <div style={{ textAlign: 'center', padding: '40px', color: MG(0.35), fontSize: '13px' }}>No memories matching filters.</div>
-          )}
+          {renderMemoriesListContent()}
         </div>
       </div>
 
-      {/* Right: Inspector */}
-      {selected ? (
-        <Card style={{ position: 'sticky', top: '16px' }}>
-          <CardHeader><CardTitle>Memory Inspector</CardTitle></CardHeader>
-          <CardContent>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {/* Content display */}
-              <div style={{
-                padding: '12px', background: MG(0.04), borderRadius: '4px',
-                border: `1px solid ${MG(0.1)}`, fontSize: '13px', lineHeight: '1.6',
-              }}>
-                {selected.content}
+      {/* Right Panel: Detail Inspector */}
+      <Card style={{ alignSelf: 'stretch', minHeight: '300px' }}>
+        <CardHeader>
+          <CardTitle>{t('memories.inspector')}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {selected ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <span style={{ fontSize: '10px', color: MG(0.4), textTransform: 'uppercase' }}>{t('memories.contentLabel')}</span>
+                <div style={{
+                  padding: '10px', background: MG(0.03), border: `1px solid ${MG(0.07)}`,
+                  borderRadius: '4px', fontSize: '13px', lineHeight: '1.5', whiteSpace: 'pre-wrap', marginTop: '4px',
+                }}>{selected.content}</div>
               </div>
 
-              {/* Metadata grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '11px', fontFamily: 'var(--theme-font-mono)' }}>
-                {[
-                  ['Source', selected.source || 'agent'],
-                  ['Scope', selected.scope || 'global'],
-                  ['Created', formatDateLabel(selected.created_at, 'unknown')],
-                  ['Expires', selected.valid_until ? formatDateLabel(selected.valid_until, 'unknown') : 'Never'],
-                ].map(([k, v]) => (
-                  <div key={k} style={{ padding: '8px', background: MG(0.04), borderRadius: '4px', border: `1px solid ${MG(0.07)}` }}>
-                    <div style={{ color: MG(0.4), marginBottom: '2px' }}>{k}</div>
-                    <div style={{ color: MG(0.8) }}>{v}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}>
+                <div>{t('common.id')}: <span style={{ fontFamily: 'var(--theme-font-mono)', color: MG(0.5) }}>{selected.id.slice(0, 8)}</span></div>
+                <div>{t('common.status')}: <strong style={{ textTransform: 'capitalize' }}>{selected.status}</strong></div>
+                <div>{t('common.veracity')}: <strong style={{ textTransform: 'capitalize' }}>{selected.veracity}</strong></div>
+                <div>{t('common.importance')}: <strong>{safeNumber(selected.importance, 2)}</strong></div>
+                <div>{t('common.source')}: <strong style={{ textTransform: 'capitalize' }}>{selected.source || t('common.unknown')}</strong></div>
+                <div>{t('common.scope')}: <strong style={{ textTransform: 'capitalize' }}>{selected.scope || t('common.session')}</strong></div>
+                {selected.session_id && (
+                  <div style={{ gridColumn: 'span 2' }}>
+                    {t('common.session')}:{' '}
+                    <button
+                      type="button"
+                      onClick={() => onInspectSession(selected.session_id!)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        font: 'inherit',
+                        fontSize: '12px',
+                        textDecoration: 'underline',
+                        cursor: 'pointer',
+                        color: MG(0.7),
+                        fontFamily: 'var(--theme-font-mono)',
+                      }}
+                    >
+                      {selected.session_id}
+                    </button>
                   </div>
-                ))}
+                )}
+                <div style={{ gridColumn: 'span 2' }}>{t('memories.createdLabel')}: <span>{formatDateLabel(selected.created_at)}</span></div>
+                {selected.valid_until && <div style={{ gridColumn: 'span 2' }}>{t('memories.expiresLabel')}: <span>{formatDateLabel(selected.valid_until)}</span></div>}
               </div>
 
-              {/* Admin section */}
-              {adminMode ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '12px', borderTop: `1px solid ${MG(0.1)}` }}>
-                  <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', color: MG(0.45) }}>Admin Actions</div>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <Button onClick={() => onInspectMemory(selected)} primary>{t('memories.viewDetails')}</Button>
+              </div>
 
-                  {/* Veracity buttons */}
-                  <div>
-                    <div style={{ fontSize: '11px', color: MG(0.45), marginBottom: '6px' }}>Change Veracity</div>
-                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                      {['stated', 'inferred', 'tool'].map(v => (
-                        <Button
-                          key={v}
-                          onClick={() => handleSetVeracity(selected.id, v)}
-                          disabled={submitting}
-                          outlined={selected.veracity !== v}
-                        >
-                          {v}
-                        </Button>
-                      ))}
+              {/* Maintenance tools (Admin only) */}
+              {adminMode && (
+                <div style={{ borderTop: `1px solid ${MG(0.1)}`, paddingTop: '12px', marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ fontSize: '11px', textTransform: 'uppercase', color: MG(0.45) }}>{t('memories.adminActions')}</div>
+
+                  {/* Supersede */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <Input
+                      placeholder={t('memories.supersedePlaceholder')}
+                      value={supersedeText}
+                      onChange={(e: any) => setSupersedeText(e.target.value)}
+                    />
+                    <Button onClick={() => handleSupersede(selected.id)} disabled={submitting || !supersedeText.trim()} primary>{t('memories.supersedeBtn')}</Button>
+                  </div>
+
+                  {/* Adjust Veracity / Trust */}
+                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                    <div style={{ flex: 1 }}>
+                      <Select value="" onValueChange={(val: string) => val && handleSetVeracity(selected.id, val)} disabled={submitting}>
+                        <SelectOption value="">{t('memories.adjustVeracity')}</SelectOption>
+                        <SelectOption value="stated">{t('common.stated')}</SelectOption>
+                        <SelectOption value="inferred">{t('common.inferred')}</SelectOption>
+                        <SelectOption value="tool">{t('common.tool')}</SelectOption>
+                        <SelectOption value="imported">{t('common.imported')}</SelectOption>
+                        <SelectOption value="unknown">{t('common.unknown')}</SelectOption>
+                      </Select>
                     </div>
                   </div>
 
                   {/* Expiry */}
-                  <div>
-                    <div style={{ fontSize: '11px', color: MG(0.45), marginBottom: '6px' }}>Set Expiry Date</div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <Input type="date" value={expiryDate} onChange={(e: any) => setExpiryDate(e.target.value)} style={{ flex: 1 }} />
-                      <Button onClick={() => handleSetExpiry(selected.id)} disabled={submitting}>Apply</Button>
-                    </div>
-                  </div>
-
-                  {/* Supersede */}
-                  <div>
-                    <div style={{ fontSize: '11px', color: MG(0.45), marginBottom: '6px' }}>Supersede Memory</div>
-                    <textarea
-                      placeholder="Replacement memory text..."
-                      value={supersedeText}
-                      onChange={(e) => setSupersedeText(e.target.value)}
-                      style={{
-                        width: '100%', padding: '8px', fontSize: '12px',
-                        background: MG(0.04), border: `1px solid ${MG(0.15)}`,
-                        borderRadius: '4px', color: 'inherit', fontFamily: 'inherit',
-                        height: '80px', resize: 'vertical', outline: 'none', boxSizing: 'border-box',
-                      }}
+                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                    <Input
+                      type="datetime-local"
+                      value={expiryDate}
+                      onChange={(e: any) => setExpiryDate(e.target.value)}
+                      style={{ flex: 1, height: '36px' }}
                     />
-                    <Button onClick={() => handleSupersede(selected.id)} disabled={submitting || !supersedeText.trim()} style={{ width: '100%', marginTop: '6px' }}>
-                      Supersede
-                    </Button>
+                    <Button onClick={() => handleSetExpiry(selected.id)} disabled={submitting} ghost>{t('memories.setExpiry')}</Button>
                   </div>
 
                   {/* Invalidate */}
-                  <Button
-                    destructive
-                    onClick={() => handleInvalidate(selected.id)}
-                    disabled={submitting}
-                    style={{ width: '100%' }}
-                  >
-                    Invalidate & Expire Memory
-                  </Button>
-                </div>
-              ) : (
-                <div style={{
-                  padding: '12px', background: MG(0.03), borderRadius: '4px',
-                  border: `1px dashed ${MG(0.15)}`, textAlign: 'center',
-                  fontSize: '11px', color: MG(0.4), fontFamily: 'var(--theme-font-mono)',
-                }}>
-                  Enable Admin Mode in Settings to unlock maintenance actions.
+                  <Button onClick={() => handleInvalidate(selected.id)} disabled={submitting} style={{ background: '#ef4444', color: '#fff', marginTop: '4px' }}>{t('memories.invalidateBtn')}</Button>
                 </div>
               )}
             </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <div style={{
-          padding: '40px', textAlign: 'center', color: MG(0.35),
-          border: `1px dashed ${MG(0.15)}`, borderRadius: '4px', fontSize: '13px',
-        }}>
-          Select a memory from the list to inspect it.
-        </div>
-      )}
+          ) : (
+            <div style={{ color: MG(0.4), fontSize: '13px', textAlign: 'center', padding: '40px' }}>{t('memories.selectPrompt')}</div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };
